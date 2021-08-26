@@ -1,7 +1,7 @@
 # setup-check-codeowners
 
 ![Latest Release](https://img.shields.io/github/v/release/zendesk/setup-check-codeowners?label=Latest%20Release)
-![Examples](https://github.com/zendesk/setup-check-codeowners/workflows/Test/badge.svg?branch=master)
+![Examples](https://github.com/zendesk/setup-check-codeowners/workflows/Test/badge.svg?branch=main)
 
 A GitHub action to install `check-codeowners`. This action will add
 `check-codeowners` to the `PATH` making them available for subsequent
