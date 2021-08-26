@@ -1,6 +1,4 @@
 #!/bin/bash -ex
-echo setup-check-codeowners: PWD=$PWD
-echo setup-check-codeowners: PATH=$PATH
-echo setup-check-codeowners: GITHUB_PATH=$GITHUB_PATH
-grep -n ^ "$GITHUB_PATH" || :
-echo "$PWD/bin" >> "$GITHUB_PATH"
+install -d -m 755 ~/bin
+install -m 755 ./bin/check-codeowners ~/bin/
+echo "$HOME/bin" >> "$GITHUB_PATH"
