@@ -324,6 +324,9 @@ brute_force = false
 who_owns = false
 files_owned = false
 check_unowned = false
+should_check_indent = true
+should_check_sorted = true
+should_check_valid_owners = true
 
 OptionParser.new do |opts|
   opts.banner = "Usage: check-codeowners [options] [arguments]"
@@ -336,6 +339,15 @@ OptionParser.new do |opts|
   end
   opts.on("-b", "--brute-force", "Slower, more thorough checking") do
     brute_force = true
+  end
+  opts.on("--[no-]check-indent", "Whether or not to require equal indenting") do |value|
+    should_check_indent = value
+  end
+  opts.on("--[no-]check-sorted", "Whether or not to require sorted entries") do |value|
+    should_check_sorted = value
+  end
+  opts.on("--[no-]check-valid-owners", "Whether or not to check owners against VALIDOWNERS") do |value|
+    should_check_valid_owners = value
   end
   opts.on(
     "--who-owns",
@@ -391,9 +403,9 @@ if files_owned
   exit
 end
 
-check_sorted(owner_entries)
-check_indent(owner_entries)
-check_valid_owners(owner_entries)
+check_sorted(owner_entries) if should_check_sorted
+check_indent(owner_entries) if should_check_indent
+check_valid_owners(owner_entries) if should_check_valid_owners
 
 all_files = get_all_files
 unowned = find_unowned_files(owner_entries, all_files)
