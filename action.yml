@@ -1,0 +1,17 @@
+name: Setup check-codeowners
+description: Install a version of check-codeowners and update $PATH to make it available to subsequent actions
+branding:
+  icon: code
+  color: gray-dark
+
+inputs:
+  version:
+    description: 'Version of check-codeowners to install. Default: `latest`'
+    required: false
+    default: latest
+
+runs:
+  using: 'composite'
+  steps:
+    - run: ${{ github.action_path }}/install.sh
+      shell: bash
