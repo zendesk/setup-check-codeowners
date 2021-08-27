@@ -3,6 +3,15 @@ name: Test
 on: push
 
 jobs:
+  test:
+    name: rspec
+    runs-on: [ self-hosted, zendesk-stable ]
+    steps:
+      - uses: zendesk/checkout@v2
+      - uses: zendesk/setup-ruby@v1.48.0
+        with:
+          bundler-cache: true
+      - run: bundle exec rspec -f d
   install:
     name: Install check-codeowners and show help
     runs-on: ubuntu-latest

@@ -43,9 +43,13 @@ class OwnerEntry < Entry
 end
 
 def parse_codeowners_file
-  lines = IO.readlines(CODEOWNERS_PATH).map(&:chomp)
+  lines = begin
+            IO.readlines(CODEOWNERS_PATH).map(&:chomp)
+          rescue Errno::ENOENT
+            []
+          end
 
-  owner_re = /\S+\/\S+/
+  owner_re = /\S+/
 
   lines.each_with_index.map do |line, index|
     base = { line_number: index + 1, text: line, file: CODEOWNERS_PATH }
@@ -70,7 +74,11 @@ def parse_codeowners_file
 end
 
 def parse_unownedignore_file
-  lines = IO.readlines(CODEOWNERS_IGNORE_PATH).map(&:chomp)
+  lines = begin
+            IO.readlines(CODEOWNERS_IGNORE_PATH).map(&:chomp)
+          rescue Errno::ENOENT
+            []
+          end
 
   patterns = Set.new
   files = Set.new
@@ -113,8 +121,8 @@ def check_sorted(owner_entries)
   owner_entries.each_with_index.select do |entry, index|
     if index > 0 && entry.pattern <= owner_entries[index - 1].pattern
       error(
-        code: "pattern_out_of_order",
-        message: "Pattern is out of order at #{entry.file}:#{entry.line_number}",
+        code: "codeowners_file_not_in_sequence",
+        message: "Line is duplicated or out of sequence at #{entry.file}:#{entry.line_number}",
         entry: entry
       )
     end
@@ -353,7 +361,7 @@ OptionParser.new do |opts|
     "--who-owns",
     "Treat arguments as a list of files; show who owns each file, then exit." \
     " If no arguments are given, all files are shown. Incompatible with" \
-    " --what-files-owned."
+    " --files-owned."
   ) do
     who_owns = true
   end
@@ -441,6 +449,10 @@ else
 
   @errors.each { |item| show.call("ERROR", item) }
   @warnings.each { |item| show.call("WARNING", item) }
+
+  if @errors.any? || @warnings.any?
+    puts "For help, see https://github.com/zendesk/setup-check-codeowners/blob/main/Usage.md"
+  end
 end
 
 exit 2 if @errors.any?
