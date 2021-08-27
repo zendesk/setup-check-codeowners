@@ -294,8 +294,9 @@ def check_unowned_files(unowned_files)
   unowned_files = Set.new(unowned_files)
 
   parsed = parse_unownedignore_file
-  parsed.errors.each(&method(:error))
 
+  warns = []
+  errors = [*parsed.errors]
   used_ignores = Set.new
   ignored_unowned = Set.new
 
@@ -315,21 +316,23 @@ def check_unowned_files(unowned_files)
 
   non_ignored_files = unowned_files - ignored_unowned
   non_ignored_files.sort.each do |file|
-    error(
+    errors << {
       code: "non_ignored_files",
       message: "Please add this file to #{CODEOWNERS_PATH}: #{file}", # This file does not have an owner
       unowned: file,
-    )
+    }
   end
 
   unused_ignores = (parsed.files + parsed.patterns) - used_ignores
   unused_ignores.sort.each do |unused_ignore|
-    warn(
+    warns << {
       code: "unused_ignore",
       message: "The following entry in #{CODEOWNERS_IGNORE_PATH} doesn't match any unowned files and should be removed: #{unused_ignore}", # Obsolete entry
       unused_ignore: unused_ignore,
-    )
+    }
   end
+
+  Struct.new(:warns, :errors).new(warns, errors)
 end
 
 debug = false
@@ -427,7 +430,11 @@ check_valid_owners(owner_entries) if should_check_valid_owners
 all_files = get_all_files
 unowned = find_unowned_files(owner_entries, all_files)
 
-check_unowned_files(unowned) if check_unowned
+if check_unowned
+  r = check_unowned_files(unowned)
+  r.warns.each(&method(:warn))
+  r.errors.each(&method(:error))
+end
 
 match_map = if brute_force
   check_individual_patterns(owner_entries)
