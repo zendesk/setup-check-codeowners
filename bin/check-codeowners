@@ -136,16 +136,20 @@ def check_sorted(owner_entries)
 end
 
 def check_indent(owner_entries)
+  errors = []
+
   # We could auto-fix this
   owner_entries.each_with_index.select do |entry, index|
     if index > 0 && entry.indent != owner_entries[index - 1].indent
-      error(
+      errors << {
         code: "mismatched_indent",
         message: "Mismatched indent at #{entry.file}:#{entry.line_number}",
         entry: entry
-      )
+      }
     end
   end
+
+  Struct.new(:errors).new(errors)
 end
 
 def check_valid_owners(owner_entries)
@@ -465,7 +469,11 @@ if options.files_owned
 end
 
 check_sorted(owner_entries) if options.should_check_sorted
-check_indent(owner_entries) if options.should_check_indent
+
+if options.should_check_indent
+  r = check_indent(owner_entries)
+  r.errors.each(&method(:error))
+end
 
 if options.should_check_valid_owners
   r = check_valid_owners(owner_entries)
