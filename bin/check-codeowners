@@ -123,16 +123,20 @@ def error(item)
 end
 
 def check_sorted(owner_entries)
+  errors = []
+
   # We could auto-fix this, if it wasn't for comments and blank lines
   owner_entries.each_with_index.select do |entry, index|
     if index > 0 && entry.pattern <= owner_entries[index - 1].pattern
-      error(
+      errors << {
         code: "codeowners_file_not_in_sequence",
         message: "Line is duplicated or out of sequence at #{entry.file}:#{entry.line_number}",
         entry: entry
-      )
+      }
     end
   end
+
+  Struct.new(:errors).new(errors)
 end
 
 def check_indent(owner_entries)
@@ -468,7 +472,10 @@ if options.files_owned
   exit
 end
 
-check_sorted(owner_entries) if options.should_check_sorted
+if options.should_check_sorted
+  r = check_sorted(owner_entries)
+  r.errors.each(&method(:error))
+end
 
 if options.should_check_indent
   r = check_indent(owner_entries)
