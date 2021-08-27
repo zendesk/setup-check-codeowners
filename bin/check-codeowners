@@ -152,21 +152,30 @@ def check_valid_owners(owner_entries)
   # This is just to catch typos.
   # We could look up against github, of course.
   # For now, hard-wired is better than nothing.
-  valid_owners = IO.readlines(VALIDOWNERS_PATH).map(&:chomp)
+  valid_owners = begin
+                   IO.readlines(VALIDOWNERS_PATH).map(&:chomp)
+                 rescue Errno::ENOENT
+                   nil
+                 end
 
-  owner_entries.each do |entry|
-    bad_owners = entry.owners - valid_owners
+  errors = []
 
-    bad_owners.each do |bad_owner|
-      error(
-        code: "invalid_owner",
-        message: "Invalid owner #{bad_owner} at #{entry.file}:#{entry.line_number}",
-        bad_owner: bad_owner,
-        entry: entry
-      )
+  if valid_owners
+    owner_entries.each do |entry|
+      bad_owners = entry.owners - valid_owners
+
+      bad_owners.each do |bad_owner|
+        errors << {
+          code: "invalid_owner",
+          message: "Invalid owner #{bad_owner} at #{entry.file}:#{entry.line_number}",
+          bad_owner: bad_owner,
+          entry: entry
+        }
+      end
     end
   end
-rescue Errno::ENOENT
+
+  Struct.new(:errors).new(errors)
 end
 
 def git_ls_files(args:)
@@ -457,7 +466,11 @@ end
 
 check_sorted(owner_entries) if options.should_check_sorted
 check_indent(owner_entries) if options.should_check_indent
-check_valid_owners(owner_entries) if options.should_check_valid_owners
+
+if options.should_check_valid_owners
+  r = check_valid_owners(owner_entries)
+  r.errors.each(&method(:error))
+end
 
 all_files = get_all_files
 unowned = find_unowned_files(owner_entries, all_files)
