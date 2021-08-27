@@ -88,16 +88,18 @@ def parse_unownedignore_file
   files = Set.new
   previous_line = nil
 
+  errors = []
+
   lines.each_with_index do |line, index|
     next if line.empty? || line.start_with?("#")
 
     if previous_line && line <= previous_line
-      error(
+      errors << {
         message: "Line is duplicated or out of sequence at #{CODEOWNERS_IGNORE_PATH}:#{index + 1}",
         code: "ignore_file_not_in_sequence",
         file: CODEOWNERS_IGNORE_PATH,
         line: index + 1,
-      )
+      }
     end
 
     previous_line = line
@@ -109,7 +111,7 @@ def parse_unownedignore_file
     end
   end
 
-  [patterns, files]
+  Struct.new(:patterns, :files, :errors).new(patterns, files, errors)
 end
 
 def warn(item)
@@ -291,18 +293,19 @@ end
 def check_unowned_files(unowned_files)
   unowned_files = Set.new(unowned_files)
 
-  ignore_patterns, ignore_files = parse_unownedignore_file
+  parsed = parse_unownedignore_file
+  parsed.errors.each(&method(:error))
 
   used_ignores = Set.new
   ignored_unowned = Set.new
 
   unowned_files.each do |unowned_file|
-    if ignore_files.include?(unowned_file)
+    if parsed.files.include?(unowned_file)
       ignored_unowned.add(unowned_file)
       used_ignores.add(unowned_file)
     end
 
-    ignore_patterns.each do |ignore_pattern|
+    parsed.patterns.each do |ignore_pattern|
       if File.fnmatch?(ignore_pattern, unowned_file)
         ignored_unowned.add(unowned_file)
         used_ignores.add(ignore_pattern)
@@ -319,7 +322,7 @@ def check_unowned_files(unowned_files)
     )
   end
 
-  unused_ignores = (ignore_files + ignore_patterns) - used_ignores
+  unused_ignores = (parsed.files + parsed.patterns) - used_ignores
   unused_ignores.sort.each do |unused_ignore|
     warn(
       code: "unused_ignore",
