@@ -51,7 +51,9 @@ def parse_codeowners_file
 
   owner_re = /\S+/
 
-  lines.each_with_index.map do |line, index|
+  errors = []
+
+  entries = lines.each_with_index.map do |line, index|
     base = { line_number: index + 1, text: line, file: CODEOWNERS_PATH }
 
     case line
@@ -62,15 +64,17 @@ def parse_codeowners_file
       base.merge!(pattern: $2, indent: ($1).length, owners: $3.split(' '))
       OwnerEntry.new(base)
     else
-      entry = Entry.new(base)
-      error(
-        code: "unrecognised_line",
-        message: "Unrecognised line at #{entry.file}:#{entry.line_number}",
-        entry: entry
-      )
-      entry
+      Entry.new(base).tap do |entry|
+        errors << {
+          code: "unrecognised_line",
+          message: "Unrecognised line at #{entry.file}:#{entry.line_number}",
+          entry: entry
+        }
+      end
     end
   end
+
+  Struct.new(:entries, :errors).new(entries, errors)
 end
 
 def parse_unownedignore_file
@@ -397,7 +401,9 @@ if !who_owns && !files_owned && ARGV.any?
   exit 2
 end
 
-entries = parse_codeowners_file
+parse_results = parse_codeowners_file
+entries = parse_results.entries
+parse_results.errors.each(&method(:error))
 owner_entries = entries.select { |entry| entry.is_a?(OwnerEntry) }
 
 if who_owns
