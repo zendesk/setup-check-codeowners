@@ -265,11 +265,11 @@ def report_who_owns(owner_entries, show_json, files)
   report_file_ownership(results, show_json, :who_owns)
 end
 
-def report_files_owned(owner_entries, show_json)
+def report_files_owned(owner_entries, show_json, args)
   # We don't *have* to brute force every pattern - we could instead
   # run git ls-files per owner, not per pattern. But we already have
   # the code, so it's convenient.
-  match_map = if ARGV.any?
+  match_map = if args.any?
     check_individual_patterns(owner_entries)
   else
     {}
@@ -279,7 +279,7 @@ def report_files_owned(owner_entries, show_json)
     matches = match_map[file]
     next unless matches
 
-    owners = matches.map(&:owners).flatten.sort.uniq & ARGV
+    owners = matches.map(&:owners).flatten.sort.uniq & args
     next unless owners.any?
 
     { file: file, owners: owners }
@@ -295,7 +295,7 @@ def check_unowned_files(unowned_files)
 
   parsed = parse_unownedignore_file
 
-  warns = []
+  warnings = []
   errors = [*parsed.errors]
   used_ignores = Set.new
   ignored_unowned = Set.new
@@ -325,128 +325,160 @@ def check_unowned_files(unowned_files)
 
   unused_ignores = (parsed.files + parsed.patterns) - used_ignores
   unused_ignores.sort.each do |unused_ignore|
-    warns << {
+    warnings << {
       code: "unused_ignore",
       message: "The following entry in #{CODEOWNERS_IGNORE_PATH} doesn't match any unowned files and should be removed: #{unused_ignore}", # Obsolete entry
       unused_ignore: unused_ignore,
     }
   end
 
-  Struct.new(:warns, :errors).new(warns, errors)
+  Struct.new(:warnings, :errors).new(warnings, errors)
 end
 
-debug = false
-show_json = false
-strict = false
-brute_force = false
-who_owns = false
-files_owned = false
-check_unowned = false
-should_check_indent = true
-should_check_sorted = true
-should_check_valid_owners = true
+class GetOptions
 
-OptionParser.new do |opts|
-  opts.banner = "Usage: check-codeowners [options] [arguments]"
+  def initialize(argv)
+    @debug = false
+    @show_json = false
+    @strict = false
+    @brute_force = false
+    @who_owns = false
+    @files_owned = false
+    @check_unowned = false
+    @should_check_indent = true
+    @should_check_sorted = true
+    @should_check_valid_owners = true
+    read_options(argv)
+    validate
+  end
 
-  opts.on("-j", "--json", "Show results as JSON") do
-    show_json = true
+  attr_reader :debug, :show_json, :strict, :brute_force,
+    :who_owns, :files_owned,
+    :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
+    :args
+
+  private
+
+  attr_writer :debug, :show_json, :strict, :brute_force,
+    :who_owns, :files_owned,
+    :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
+    :args
+
+  def read_options(argv)
+    parser = OptionParser.new do |opts|
+      opts.banner = "Usage: check-codeowners [options] [arguments]"
+
+      opts.on("-j", "--json", "Show results as JSON") do
+        self.show_json = true
+      end
+      opts.on("-s", "--strict", "Treat warnings as errors") do
+        self.strict = true
+      end
+      opts.on("-b", "--brute-force", "Slower, more thorough checking") do
+        self.brute_force = true
+      end
+      opts.on("--[no-]check-indent", "Whether or not to require equal indenting") do |value|
+        self.should_check_indent = value
+      end
+      opts.on("--[no-]check-sorted", "Whether or not to require sorted entries") do |value|
+        self.should_check_sorted = value
+      end
+      opts.on("--[no-]check-valid-owners", "Whether or not to check owners against VALIDOWNERS") do |value|
+        self.should_check_valid_owners = value
+      end
+      opts.on(
+        "--who-owns",
+        "Treat arguments as a list of files; show who owns each file, then exit." \
+        " If no arguments are given, all files are shown. Incompatible with" \
+        " --files-owned."
+      ) do
+        self.who_owns = true
+      end
+      opts.on(
+        "--files-owned",
+        "Treat arguments as a list of owners; show what files they own, then exit." \
+        " Incompatible with --who-owns."
+      ) do
+        self.files_owned = true
+      end
+      opts.on(
+        "--check-unowned",
+        "Checks if there are new files that are not owned"
+      ) do
+        self.check_unowned = true
+      end
+      opts.on("-d", "--debug", "Include debug output; implies --json") do
+        self.debug = true
+        self.show_json = true
+      end
+    end
+
+    argv = [*argv]
+    parser.parse!(argv)
+    @args = argv
   end
-  opts.on("-s", "--strict", "Treat warnings as errors") do
-    strict = true
+
+  def validate
+    if who_owns && files_owned
+      $stderr.puts "Invalid usage. Try check-codeowners --help"
+      exit 2
+    end
+
+    if !who_owns && !files_owned && args.any?
+      $stderr.puts "Invalid usage. Try check-codeowners --help"
+      exit 2
+    end
   end
-  opts.on("-b", "--brute-force", "Slower, more thorough checking") do
-    brute_force = true
-  end
-  opts.on("--[no-]check-indent", "Whether or not to require equal indenting") do |value|
-    should_check_indent = value
-  end
-  opts.on("--[no-]check-sorted", "Whether or not to require sorted entries") do |value|
-    should_check_sorted = value
-  end
-  opts.on("--[no-]check-valid-owners", "Whether or not to check owners against VALIDOWNERS") do |value|
-    should_check_valid_owners = value
-  end
-  opts.on(
-    "--who-owns",
-    "Treat arguments as a list of files; show who owns each file, then exit." \
-    " If no arguments are given, all files are shown. Incompatible with" \
-    " --files-owned."
-  ) do
-    who_owns = true
-  end
-  opts.on(
-    "--files-owned",
-    "Treat arguments as a list of owners; show what files they own, then exit." \
-    " Incompatible with --who-owns."
-  ) do
-    files_owned = true
-  end
-  opts.on(
-    "--check-unowned",
-    "Checks if there are new files that are not owned"
-  ) do
-    check_unowned = true
-  end
-  opts.on("-d", "--debug", "Include debug output; implies --json") do
-    debug = true
-    show_json = true
-  end
-end.parse!
+
+end
+
+# MAIN START
+
+options = GetOptions.new(ARGV)
 
 @warnings = []
 @errors = []
-
-if who_owns && files_owned
-  warn "Invalid usage"
-  exit 2
-end
-
-if !who_owns && !files_owned && ARGV.any?
-  warn "Invalid usage"
-  exit 2
-end
 
 parse_results = parse_codeowners_file
 entries = parse_results.entries
 parse_results.errors.each(&method(:error))
 owner_entries = entries.select { |entry| entry.is_a?(OwnerEntry) }
 
-if who_owns
-  files = (ARGV.empty? ? get_all_files : ARGV)
-  report_who_owns(owner_entries, show_json, files)
+if options.who_owns
+  files = (options.args.empty? ? get_all_files : options.args)
+  report_who_owns(owner_entries, options.show_json, files)
   exit
 end
 
-if files_owned
-  report_files_owned(owner_entries, show_json)
+if options.files_owned
+  report_files_owned(owner_entries, options.show_json, options.args)
   exit
 end
 
-check_sorted(owner_entries) if should_check_sorted
-check_indent(owner_entries) if should_check_indent
-check_valid_owners(owner_entries) if should_check_valid_owners
+check_sorted(owner_entries) if options.should_check_sorted
+check_indent(owner_entries) if options.should_check_indent
+check_valid_owners(owner_entries) if options.should_check_valid_owners
 
 all_files = get_all_files
 unowned = find_unowned_files(owner_entries, all_files)
 
-if check_unowned
+if options.check_unowned
   r = check_unowned_files(unowned)
-  r.warns.each(&method(:warn))
+  r.warnings.each(&method(:warn))
   r.errors.each(&method(:error))
 end
 
-match_map = if brute_force
+match_map = if options.brute_force
   check_individual_patterns(owner_entries)
 end
 
-if show_json
+if options.show_json
   output = {
     errors: @errors,
     warnings: @warnings
   }
 
-  if debug
+  if options.debug
     output.merge!(
       entries: entries,
       owner_entries: owner_entries,
@@ -472,5 +504,5 @@ else
 end
 
 exit 2 if @errors.any?
-exit 1 if @warnings.any? && strict
+exit 1 if @warnings.any? && options.strict
 exit 0
