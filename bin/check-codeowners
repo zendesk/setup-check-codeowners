@@ -226,17 +226,18 @@ def check_individual_patterns(owner_entries)
   # May not scale well!
 
   match_map = {}
+  warnings = []
 
   owner_entries.each do |entry|
     matched_files = git_ls_files(args: ["--cached", "--ignored", "--exclude", entry.pattern])
 
     # Report on any pattern which doesn't match any files (cruft)
     if matched_files.empty?
-      warn(
+      warnings << {
         code: "unmatched_pattern",
         message: "Pattern #{entry.pattern} at #{entry.file}:#{entry.line_number} doesn't match any files",
         entry: entry,
-      )
+      }
     end
 
     matched_files.each do |file|
@@ -249,7 +250,7 @@ def check_individual_patterns(owner_entries)
   # "conflict" is absolutely intended? Maybe it's not worth checking.
   # Maybe "too many" owners is better than too few.
 
-  match_map
+  Struct.new(:match_map, :warnings).new(match_map, warnings)
 end
 
 def report_file_ownership(results, show_json, json_root_key)
@@ -268,7 +269,8 @@ def report_file_ownership(results, show_json, json_root_key)
 end
 
 def report_who_owns(owner_entries, show_json, files)
-  match_map = check_individual_patterns(owner_entries)
+  # Discards warnings
+  match_map = check_individual_patterns(owner_entries).match_map
 
   results = files.map do |file|
     file = file.sub(/^\.\/+/, '')
@@ -287,7 +289,8 @@ def report_files_owned(owner_entries, show_json, args)
   # run git ls-files per owner, not per pattern. But we already have
   # the code, so it's convenient.
   match_map = if args.any?
-    check_individual_patterns(owner_entries)
+    # Discards warnings
+    check_individual_patterns(owner_entries).match_map
   else
     {}
   end
@@ -497,7 +500,9 @@ if options.check_unowned
 end
 
 match_map = if options.brute_force
-  check_individual_patterns(owner_entries)
+  r = check_individual_patterns(owner_entries)
+  r.warnings.each(&method(:warn))
+  r.match_map
 end
 
 if options.show_json
