@@ -12,11 +12,11 @@ the options given, it does one of three things:
 ## Running the checks
 
 Runs various checks against `CODEOWNERS`. If everything's fine, then it exits successfully and silently.
-If there are errors, then each error is shown on standard output, and the exit status is 2.
-If there are warnings, then each warning is shown on standard output. The exit status for warnings is
-2 if there were also errors, 1 if there were no errors but `--strict` is used, otherwise 0.
 
+If `--strict` was used, then any warnings get upgraded to errors.
+Any errors or warnings are shown on standard output.
 If there were any warnings or errors, then a link to this document is shown.
+The exit status is 2 if there were any errors, or 0 otherwise.
 
 You can also get the output as json with `--json`.
 
