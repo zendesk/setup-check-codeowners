@@ -330,7 +330,7 @@ RSpec.describe "check-codeowners checking mode" do
       r = run "--check-unowned"
 
       aggregate_failures do
-        expect(r.status.exitstatus).to eq(2)
+        expect(r.status.exitstatus).to eq(1)
         expect(r.stdout).to eq("ERROR: Line is duplicated or out of sequence at .github/CODEOWNERS.ignore:4\n" + help_message)
         expect(r.stderr).to eq("")
       end
