@@ -550,5 +550,5 @@ else
   show_checks_text(r)
 end
 
-exit 2 if r.errors.any?
+exit 1 if r.errors.any?
 exit 0
