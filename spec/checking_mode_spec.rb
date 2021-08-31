@@ -304,4 +304,45 @@ RSpec.describe "check-codeowners checking mode" do
 
   end
 
+  describe "CODEOWNERS.ignore ordering" do
+
+    before do
+      create_file "a"
+      create_file "b"
+      create_file "c"
+      add_ignore ".github/CODEOWNERS.ignore"
+    end
+
+    it "passes if the file is ordered" do
+      add_ignore "a"
+      add_ignore "b"
+      add_ignore "c"
+
+      expect_silent_success { run "--check-unowned" }
+    end
+
+    it "fails if the file is unordered" do
+      add_ignore "a"
+      add_ignore "c"
+      add_ignore "b"
+
+      r = run "--check-unowned"
+
+      aggregate_failures do
+        expect(r.status.exitstatus).to eq(2)
+        expect(r.stdout).to eq("ERROR: Line is duplicated or out of sequence at .github/CODEOWNERS.ignore:4\n" + help_message)
+        expect(r.stderr).to eq("")
+      end
+    end
+
+    it "passes if the file is unordered, but --no-check-sorted is used" do
+      add_ignore "a"
+      add_ignore "c"
+      add_ignore "b"
+
+      expect_silent_success { run "--check-unowned", "--no-check-sorted" }
+    end
+
+  end
+
 end

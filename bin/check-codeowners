@@ -77,7 +77,7 @@ def parse_codeowners_file
   Struct.new(:entries, :errors).new(entries, errors)
 end
 
-def parse_unownedignore_file
+def parse_unownedignore_file(options)
   lines = begin
             IO.readlines(CODEOWNERS_IGNORE_PATH).map(&:chomp)
           rescue Errno::ENOENT
@@ -93,7 +93,7 @@ def parse_unownedignore_file
   lines.each_with_index do |line, index|
     next if line.empty? || line.start_with?("#")
 
-    if previous_line && line <= previous_line
+    if previous_line && line <= previous_line && options.should_check_sorted
       errors << {
         message: "Line is duplicated or out of sequence at #{CODEOWNERS_IGNORE_PATH}:#{index + 1}",
         code: "ignore_file_not_in_sequence",
@@ -302,10 +302,10 @@ end
 
 # Warns if there are entries in the ignore file that are now owned
 # Errors if there are files that don't have an owner (except if the file is included in ignore)
-def check_unowned_files(unowned_files)
+def check_unowned_files(unowned_files, options)
   unowned_files = Set.new(unowned_files)
 
-  parsed = parse_unownedignore_file
+  parsed = parse_unownedignore_file(options)
 
   warnings = []
   errors = [*parsed.errors]
@@ -372,7 +372,7 @@ def run_all_checks(parse_results, owner_entries, options)
   unowned = find_unowned_files(owner_entries, all_files)
 
   if options.check_unowned
-    r = check_unowned_files(unowned)
+    r = check_unowned_files(unowned, options)
     warnings.concat(r.warnings)
     errors.concat(r.errors)
   end
