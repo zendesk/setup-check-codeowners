@@ -539,12 +539,16 @@ end
 
 r = run_all_checks(parse_results, owner_entries, options)
 
+if options.strict
+  r.errors.concat(r.warnings)
+  r.warnings = []
+end
+
 if options.show_json
   show_checks_json(entries, owner_entries, r, options)
 else
   show_checks_text(r)
 end
 
-exit 2 if r.errors.any?
-exit 1 if r.warnings.any? && options.strict
+exit 1 if r.errors.any?
 exit 0
