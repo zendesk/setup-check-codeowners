@@ -1,5 +1,29 @@
 # Using check-codeowners
 
+## Overview
+
+`check-codeowners` can be used to check and interrogate `.github/CODEOWNERS`. Depending on
+the options given, it does one of three things:
+
+ * [runs the checks](#running-the-checks). This is the default.
+ * finds out [who owns one or more files](#who-owns-this-file)
+ * finds out [which files are owned by one or more owners](#which-files-does-this-owner-own)
+
+## Running the checks
+
+Runs various checks against `CODEOWNERS`. If everything's fine, then it exits successfully and silently.
+If there are errors, then each error is shown on standard output, and the exit status is 2.
+If there are warnings, then each warning is shown on standard output. The exit status for warnings is
+2 if there were also errors, 1 if there were no errors but `--strict` is used, otherwise 0.
+
+If there were any warnings or errors, then a link to this document is shown.
+
+You can also get the output as json with `--json`.
+
+The remaining options control which checks run: for the full set, use `--brute-force --check-unowned --strict`.
+
+See [Errors and warnings](#errors-and-warnings) for a description of the checks that are run.
+
 ## Errors and warnings
 
 ### Line is duplicated or out of sequence
@@ -69,7 +93,7 @@ This error occurs when `--check-unowned` is used (which is not the default),
 and a file exists which is covered neither by `CODEOWNERS` nor `CODEOWNERS.ignore`.
 
 To fix, ensure that the file is owned according to `CODEOWNERS` (e.g. by adding a line for it),
-or ignore it via `CODEOWNERS.ignore` (or stop using `--check-unowned`).
+or ignore it via `CODEOWNERS.ignore`. Alternatively, stop using `--check-unowned`.
 
 ### The following entry in CODEOWNERS.ignore doesn't match any unowned files and should be removed
 
@@ -93,6 +117,52 @@ file2
 file3  @team_two
 ```
 
-Comments and blank lines are allowed too.
+Comments and blank lines are allowed.
 
 To fix, ensure that all `CODEOWNERS` lines are of the form `filename owner [owner ...]`.
+
+## Who owns this file?
+
+```shell
+check-codeowners --who-owns [FILE ...]
+```
+
+For each FILE listed (or if none, then all files), print a single line showing code ownership.
+Each line is of the form "filename, tab, owners":
+
+```text
+$ check-codeowners --who-owns Usage.md
+Usage.md	@zendesk/enigma
+$
+```
+
+If a file is unowned, the owner is shown as `-`.
+
+You can also get the output as JSON:
+
+```shell
+check-codeowners --json --who-owns [FILE ...]
+```
+
+## Which files does this owner own?
+
+```shell
+check-codeowners --files-owned OWNER [...]
+```
+
+For each OWNER listed, and for each file they own, print a single line showing code ownership.
+Each line is of the form "filename, tab, owners":
+
+```shell
+$ check-codeowners --files-owned @zendesk/enigma
+.github/CODEOWNERS	@zendesk/enigma
+.github/workflows/release.yml	@zendesk/enigma
+.github/workflows/test.yml	@zendesk/enigma
+...
+```
+
+You can also get the output as JSON:
+
+```shell
+check-codeowners --json --files-owned OWNER [...]
+```
