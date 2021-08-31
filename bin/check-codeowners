@@ -461,13 +461,13 @@ class GetOptions
       opts.on("-b", "--brute-force", "Slower, more thorough checking") do
         self.brute_force = true
       end
-      opts.on("--[no-]check-indent", "Whether or not to require equal indenting") do |value|
+      opts.on("--no-check-indent", "Do not require equal indenting") do |value|
         self.should_check_indent = value
       end
-      opts.on("--[no-]check-sorted", "Whether or not to require sorted entries") do |value|
+      opts.on("--no-check-sorted", "Do not require sorted entries") do |value|
         self.should_check_sorted = value
       end
-      opts.on("--[no-]check-valid-owners", "Whether or not to check owners against VALIDOWNERS") do |value|
+      opts.on("--no-check-valid-owners", "Do not check owners against VALIDOWNERS") do |value|
         self.should_check_valid_owners = value
       end
       opts.on(
