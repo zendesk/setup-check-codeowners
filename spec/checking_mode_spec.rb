@@ -55,11 +55,11 @@ RSpec.describe "check-codeowners checking mode" do
       end
     end
 
-    it "fails on warnings in --strict mode" do
+    it "turns warnings into errors in --strict mode" do
       r = run "--brute-force", "--strict"
       aggregate_failures do
-        expect(r.status.exitstatus).to eq(1)
-        expect(r.stdout).to eq("WARNING: Pattern foo at .github/CODEOWNERS:1 doesn't match any files\n" + help_message)
+        expect(r.status.exitstatus).to eq(2)
+        expect(r.stdout).to eq("ERROR: Pattern foo at .github/CODEOWNERS:1 doesn't match any files\n" + help_message)
         expect(r.stderr).to eq("")
       end
     end
@@ -243,9 +243,10 @@ RSpec.describe "check-codeowners checking mode" do
       data = JSON.parse(r.stdout)
 
       aggregate_failures do
-        expect(r.status.exitstatus).to eq(1)
-        expect(data["warnings"].length).to eq(1)
-        item = data["warnings"].first
+        expect(r.status.exitstatus).to eq(2)
+        expect(data["warnings"].length).to eq(0)
+        expect(data["errors"].length).to eq(1)
+        item = data["errors"].first
         expect(item["code"]).to eq("unused_ignore")
         expect(item["unused_ignore"]).to eq("c*")
       end
