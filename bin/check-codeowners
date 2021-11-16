@@ -1,6 +1,9 @@
 #!/usr/bin/env ruby
 
+gem 'parallel'
+
 require 'optparse'
+require 'parallel'
 require 'set'
 require 'shellwords'
 require 'tempfile'
@@ -220,9 +223,11 @@ def check_individual_patterns(owner_entries)
   match_map = {}
   warnings = []
 
-  owner_entries.each do |entry|
-    matched_files = git_ls_files(args: ["--cached", "--ignored", "--exclude", entry.pattern])
+  matched_files_collection = Parallel.map(owner_entries) do |entry|
+    git_ls_files(args: ["--cached", "--ignored", "--exclude", entry.pattern])
+  end
 
+  owner_entries.zip(matched_files_collection).each do |entry, matched_files|
     # Report on any pattern which doesn't match any files (cruft)
     if matched_files.empty?
       warnings << {
