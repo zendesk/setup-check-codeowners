@@ -213,6 +213,49 @@ def find_unowned_files(owner_entries, all_files)
   unowned_files.sort
 end
 
+def git_ls_files_by_pattern(patterns)
+  require 'etc'
+  require 'shellwords'
+  require 'tempfile'
+  require 'tmpdir'
+
+  Dir.mktmpdir do |tmpdir|
+    # Each arg to the script will be "<output_file>:<pattern>"
+
+    prefix_length = 6
+    inputs = patterns.sort.uniq.each_with_index.map do |pattern, index|
+      [ pattern, "%0#{prefix_length}d" % index ]
+    end
+
+    Tempfile.open do |script|
+      script.puts <<~SCRIPT
+        #!/bin/bash
+        umask 077
+        exec git ls-files -z --cached --ignored --exclude "${1:#{prefix_length + 1}}" > #{Shellwords.escape(tmpdir)}/${1:0:#{prefix_length}}
+      SCRIPT
+      script.flush
+      script.chmod 0o755
+
+      Tempfile.open do |input_file|
+        inputs.each do |pattern, output_file|
+          input_file.puts "#{output_file}:#{pattern}"
+        end
+        input_file.flush
+
+        system "xargs", "-n", "1", "-P", Etc.nprocessors.to_s, script.path,
+          in: input_file.path
+        $?.success? or raise "xargs / git ls-files failed"
+      end
+    end
+
+    inputs.map do |pattern, output_file|
+      file = File.join(tmpdir, output_file)
+      results = File.read(file).split("\0")
+      [pattern, results]
+    end.to_h
+  end
+end
+
 def check_individual_patterns(owner_entries)
   # Slow but thorough: use git to check which files each individual pattern matches
   # May not scale well!
@@ -220,8 +263,10 @@ def check_individual_patterns(owner_entries)
   match_map = {}
   warnings = []
 
+  matched_files_collection = git_ls_files_by_pattern(owner_entries.map { |e| e.pattern })
+
   owner_entries.each do |entry|
-    matched_files = git_ls_files(args: ["--cached", "--ignored", "--exclude", entry.pattern])
+    matched_files = matched_files_collection[entry.pattern]
 
     # Report on any pattern which doesn't match any files (cruft)
     if matched_files.empty?
