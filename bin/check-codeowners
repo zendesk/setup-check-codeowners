@@ -438,9 +438,9 @@ def run_all_checks(parse_results, owner_entries, options)
   end
 
   all_files = get_all_files
-  unowned = find_unowned_files(owner_entries, all_files)
 
   if options.check_unowned
+    unowned = find_unowned_files(owner_entries, all_files)
     r = check_unowned_files(unowned, options)
     warnings.concat(r.warnings)
     errors.concat(r.errors)
