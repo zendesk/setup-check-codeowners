@@ -452,7 +452,7 @@ def run_all_checks(parse_results, owner_entries, options)
     errors.concat(r.errors)
   end
 
-  match_map = if options.brute_force
+  match_map = if options.find_redundant_ignores
                 r = check_individual_patterns(owner_entries)
                 warnings.concat(r.warnings)
                 r.match_map
@@ -473,7 +473,7 @@ def show_checks_json(entries, owner_entries, r, options)
       owner_entries: owner_entries,
       all_files: r.all_files,
       match_map: r.match_map,
-      )
+    )
   end
 
   require 'json'
@@ -481,13 +481,8 @@ def show_checks_json(entries, owner_entries, r, options)
 end
 
 def show_checks_text(r)
-  show = proc do |prefix, item|
-    output = "#{prefix}: #{item[:message]}"
-    puts output
-  end
-
-  r.errors.each { |item| show.call("ERROR", item) }
-  r.warnings.each { |item| show.call("WARNING", item) }
+  r.errors.each { |item| puts "ERROR: #{item[:message]}" }
+  r.warnings.each { |item| puts "WARNING: #{item[:message]}" }
 
   if r.errors.any? || r.warnings.any?
     puts "For help, see https://github.com/zendesk/setup-check-codeowners/blob/main/Usage.md"
@@ -500,7 +495,7 @@ class GetOptions
     @debug = false
     @show_json = false
     @strict = false
-    @brute_force = false
+    @find_redundant_ignores = false
     @who_owns = false
     @files_owned = false
     @check_unowned = false
@@ -511,14 +506,14 @@ class GetOptions
     validate
   end
 
-  attr_reader :debug, :show_json, :strict, :brute_force,
+  attr_reader :debug, :show_json, :strict, :find_redundant_ignores,
     :who_owns, :files_owned,
     :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
     :args
 
   private
 
-  attr_writer :debug, :show_json, :strict, :brute_force,
+  attr_writer :debug, :show_json, :strict, :find_redundant_ignores,
     :who_owns, :files_owned,
     :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
     :args
@@ -533,8 +528,8 @@ class GetOptions
       opts.on("-s", "--strict", "Treat warnings as errors") do
         self.strict = true
       end
-      opts.on("-b", "--brute-force", "Slower, more thorough checking") do
-        self.brute_force = true
+      opts.on("-b", "--brute-force", "Find entries which do not match any files") do
+        self.find_redundant_ignores = true
       end
       opts.on("--no-check-indent", "Do not require equal indenting") do |value|
         self.should_check_indent = value
