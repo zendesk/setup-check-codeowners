@@ -1,12 +1,21 @@
 #!/usr/bin/env ruby
 
-gem 'parallel'
-
 require 'optparse'
-require 'parallel'
 require 'set'
 require 'shellwords'
 require 'tempfile'
+
+begin
+  require 'parallel'
+rescue LoadError
+  # The Parallel gem is not available, so let Parallel.map fall back to
+  # Enumerable#map.
+  class Parallel
+    def self.map(collection, &block)
+      collection.map(&block)
+    end
+  end
+end
 
 CODEOWNERS_PATH = ".github/CODEOWNERS"
 CODEOWNERS_IGNORE_PATH = ".github/CODEOWNERS.ignore"
