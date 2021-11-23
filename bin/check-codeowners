@@ -233,8 +233,8 @@ def git_ls_files_by_pattern(patterns)
         umask 077
         exec git ls-files -z --cached --ignored --exclude "${1:#{prefix_length + 1}}" > #{Shellwords.escape(tmpdir)}/${1:0:#{prefix_length}}
       SCRIPT
-      script.flush
       script.chmod 0o755
+      script.close
 
       Tempfile.open do |input_file|
         inputs.each do |pattern, output_file|
