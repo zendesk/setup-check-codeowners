@@ -263,23 +263,17 @@ def get_all_files
 end
 
 def find_unowned_files(owner_entries, all_files)
-  all_owners = owner_entries.map(&:owners).flatten.uniq
-
   unowned_files = Set.new(all_files)
 
-  all_owners.each do |owner|
-    Tempfile.open do |tmpfile|
-      owner_entries.each do |entry|
-        if entry.owners.include?(owner)
-          tmpfile.puts entry.pattern
-        end
-      end
-
-      tmpfile.flush
-
-      owned_files = git_ls_files(args: ["--cached", "--ignored", "--exclude-from", tmpfile.path])
-      unowned_files -= owned_files
+  Tempfile.open do |tmpfile|
+    owner_entries.each do |entry|
+      tmpfile.puts entry.pattern
     end
+
+    tmpfile.flush
+
+    owned_files = git_ls_files(args: ["--cached", "--ignored", "--exclude-from", tmpfile.path])
+    unowned_files -= owned_files
   end
 
   # Report on any file which is not matched by any entry (unowned)
@@ -444,9 +438,9 @@ def run_all_checks(parse_results, owner_entries, options)
   end
 
   all_files = get_all_files
-  unowned = find_unowned_files(owner_entries, all_files)
 
   if options.check_unowned
+    unowned = find_unowned_files(owner_entries, all_files)
     r = check_unowned_files(unowned, options)
     warnings.concat(r.warnings)
     errors.concat(r.errors)
