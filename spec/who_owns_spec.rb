@@ -1,9 +1,8 @@
-require_relative './test_helpers'
+require_relative "./test_helpers"
 
 RSpec.configure { |c| c.include TestHelpers }
 
 RSpec.describe "check-codeowners --who-owns" do
-
   before do
     setup
   end
@@ -19,7 +18,7 @@ RSpec.describe "check-codeowners --who-owns" do
     aggregate_failures do
       expect(r.status).to be_success
       expect(r.stdout.lines.map(&:chomp)).to contain_exactly(
-        "x2\t@foo/bar",
+        "x2\t@foo/bar"
       )
       expect(r.stderr).to eq("")
     end
@@ -36,7 +35,7 @@ RSpec.describe "check-codeowners --who-owns" do
     aggregate_failures do
       expect(r.status).to be_success
       expect(r.stdout.lines.map(&:chomp)).to contain_exactly(
-        "y\t-",
+        "y\t-"
       )
       expect(r.stderr).to eq("")
     end
@@ -56,10 +55,9 @@ RSpec.describe "check-codeowners --who-owns" do
         ".github/CODEOWNERS\t-",
         "x1\t@foo/bar",
         "x2\t@foo/bar",
-        "y\t-",
+        "y\t-"
       )
       expect(r.stderr).to eq("")
     end
   end
-
 end

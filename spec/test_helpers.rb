@@ -1,16 +1,15 @@
-require 'fileutils'
-require 'open3'
-require 'tmpdir'
+require "fileutils"
+require "open3"
+require "tmpdir"
 
 module TestHelpers
-
   CODEOWNERS_EXECUTABLE = File.expand_path(
     File.join(
       File.dirname(__FILE__),
       "..",
       "bin",
-      "check-codeowners",
-      )
+      "check-codeowners"
+    )
   )
 
   HELP_MESSAGE = "For help, see https://github.com/zendesk/setup-check-codeowners/blob/main/Usage.md\n"
@@ -58,7 +57,7 @@ module TestHelpers
       @files.each do |file|
         path = File.join(dir, file)
         FileUtils.mkdir_p(File.dirname(path))
-        File.open(path, 'w') { }
+        File.open(path, "w") {}
       end
 
       write_file(dir, ".github/CODEOWNERS", @codeowners)
@@ -79,7 +78,7 @@ module TestHelpers
 
     path = File.join(dir, path)
     FileUtils.mkdir_p(File.dirname(path))
-    File.open(path, 'w') do |f|
+    File.open(path, "w") do |f|
       lines.each { |line| f.puts(line) }
     end
   end
@@ -87,5 +86,4 @@ module TestHelpers
   def help_message
     HELP_MESSAGE
   end
-
 end

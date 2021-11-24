@@ -1,4 +1,4 @@
 source "https://rubygems.org" do
-  gem 'rspec'
-  gem 'standard'
+  gem "rspec"
+  gem "standard"
 end

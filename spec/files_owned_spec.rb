@@ -1,9 +1,8 @@
-require_relative './test_helpers'
+require_relative "./test_helpers"
 
 RSpec.configure { |c| c.include TestHelpers }
 
 RSpec.describe "check-codeowners --files-owned" do
-
   before do
     setup
   end
@@ -20,7 +19,7 @@ RSpec.describe "check-codeowners --files-owned" do
       expect(r.status).to be_success
       expect(r.stdout.lines.map(&:chomp)).to contain_exactly(
         "file1\t@foo/bar",
-        "file2\t@foo/bar",
+        "file2\t@foo/bar"
       )
       expect(r.stderr).to eq("")
     end
@@ -41,7 +40,7 @@ RSpec.describe "check-codeowners --files-owned" do
       expect(r.stdout.lines.map(&:chomp)).to contain_exactly(
         "file1\t@foo/bar",
         "file2\t@foo/bar",
-        "thing\t@foo/thing",
+        "thing\t@foo/thing"
       )
       expect(r.stderr).to eq("")
     end
@@ -53,5 +52,4 @@ RSpec.describe "check-codeowners --files-owned" do
 
     expect_silent_success { run "--files-owned" }
   end
-
 end

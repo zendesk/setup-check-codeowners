@@ -1,9 +1,8 @@
-require_relative './test_helpers'
+require_relative "./test_helpers"
 
 RSpec.configure { |c| c.include TestHelpers }
 
 RSpec.describe "check-codeowners checking mode" do
-
   before do
     setup
   end
@@ -37,7 +36,6 @@ RSpec.describe "check-codeowners checking mode" do
   end
 
   describe "useless CODEOWNERS lines" do
-
     before do
       add_codeowners "foo @a/b"
     end
@@ -68,11 +66,9 @@ RSpec.describe "check-codeowners checking mode" do
       create_file("foo")
       expect_silent_success { run "--brute-force" }
     end
-
   end
 
   describe "unowned files" do
-
     before do
       create_file("unowned")
       @codeowners = []
@@ -98,11 +94,9 @@ RSpec.describe "check-codeowners checking mode" do
       add_ignore "unowned"
       expect_silent_success { run "--check-unowned" }
     end
-
   end
 
   describe "indenting" do
-
     describe "is ok" do
       it "passes" do
         add_codeowners "foo      @a/b"
@@ -129,11 +123,9 @@ RSpec.describe "check-codeowners checking mode" do
         expect_silent_success { run "--no-check-indent" }
       end
     end
-
   end
 
   describe "VALIDOWNERS" do
-
     describe "missing" do
       it "assumes all owners are valid" do
         add_codeowners "foo1 @org/team1"
@@ -143,7 +135,6 @@ RSpec.describe "check-codeowners checking mode" do
     end
 
     describe "present" do
-
       before do
         add_codeowners "foo1 @org/team1"
         add_codeowners "foo2 @org/team2"
@@ -168,13 +159,10 @@ RSpec.describe "check-codeowners checking mode" do
 
       # VALIDOWNERS does not yet enforce strict ordering
       # i.e. reject duplicate / out-of-order entries.
-
     end
-
   end
 
   describe "non-codeowner lines" do
-
     it "allows comments and blanks" do
       add_codeowners "# A comment"
       add_codeowners ""
@@ -184,7 +172,6 @@ RSpec.describe "check-codeowners checking mode" do
 
       expect_silent_success { run }
     end
-
   end
 
   it "fails on unrecognised lines" do
@@ -202,7 +189,6 @@ RSpec.describe "check-codeowners checking mode" do
   end
 
   describe "unused CODEOWNERS.ignore lines" do
-
     it "fails on an unused line" do
       create_file "dog"
       create_file "fish"
@@ -217,21 +203,19 @@ RSpec.describe "check-codeowners checking mode" do
         expect(r.stderr).to eq("")
       end
     end
-
   end
 
   describe "json output" do
-
     it "handles success" do
       create_file "x"
       add_codeowners "x @y"
 
       r = run "--json"
-      require 'json'
+      require "json"
       data = JSON.parse(r.stdout)
 
       expect(r.status).to be_success
-      expect(data).to eq({"errors"=>[], "warnings"=>[]})
+      expect(data).to eq({"errors" => [], "warnings" => []})
     end
 
     it "reports warnings" do
@@ -239,7 +223,7 @@ RSpec.describe "check-codeowners checking mode" do
       add_ignore "c*"
 
       r = run "--json", "--strict", "--check-unowned"
-      require 'json'
+      require "json"
       data = JSON.parse(r.stdout)
 
       aggregate_failures do
@@ -256,7 +240,7 @@ RSpec.describe "check-codeowners checking mode" do
       add_codeowners "bad_line"
 
       r = run "--json"
-      require 'json'
+      require "json"
       data = JSON.parse(r.stdout)
 
       aggregate_failures do
@@ -268,11 +252,9 @@ RSpec.describe "check-codeowners checking mode" do
         expect(item["entry"]["line_number"]).to eq(1)
       end
     end
-
   end
 
   describe "CODEOWNERS ordering" do
-
     it "passes if the file is ordered" do
       add_codeowners "a @owner"
       add_codeowners "b @owner"
@@ -302,11 +284,9 @@ RSpec.describe "check-codeowners checking mode" do
 
       expect_silent_success { run "--no-check-sorted" }
     end
-
   end
 
   describe "CODEOWNERS.ignore ordering" do
-
     before do
       create_file "a"
       create_file "b"
@@ -343,7 +323,5 @@ RSpec.describe "check-codeowners checking mode" do
 
       expect_silent_success { run "--check-unowned", "--no-check-sorted" }
     end
-
   end
-
 end
