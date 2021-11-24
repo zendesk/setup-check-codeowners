@@ -1,4 +1,5 @@
 #!/usr/bin/env ruby
+# frozen_string_literal: true
 
 require 'optparse'
 require 'set'
@@ -16,7 +17,7 @@ class MultiGitLsRunner
 
     # Each arg to the script will be "<output_file>:<pattern>"
     @inputs = patterns.sort.uniq.each_with_index.map do |pattern, index|
-      [ pattern, "%0#{PREFIX_LENGTH}d" % index ]
+      [pattern, "%0#{PREFIX_LENGTH}d" % index]
     end
   end
 
@@ -64,7 +65,7 @@ class MultiGitLsRunner
       input_file.flush
 
       system "xargs", "-n", "1", "-P", Etc.nprocessors.to_s, @splitter,
-        in: input_file.path
+             in: input_file.path
       $?.success? or raise "xargs / git ls-files failed"
     end
   end
@@ -128,16 +129,16 @@ class GetOptions
   end
 
   attr_reader :debug, :show_json, :strict, :find_redundant_ignores,
-    :who_owns, :files_owned,
-    :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
-    :args
+              :who_owns, :files_owned,
+              :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
+              :args
 
   private
 
   attr_writer :debug, :show_json, :strict, :find_redundant_ignores,
-    :who_owns, :files_owned,
-    :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
-    :args
+              :who_owns, :files_owned,
+              :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
+              :args
 
   def read_options(argv)
     parser = OptionParser.new do |opts|
@@ -209,10 +210,10 @@ end
 class Parsers
   def parse_codeowners_file(path)
     lines = begin
-              IO.readlines(path).map(&:chomp)
-            rescue Errno::ENOENT
-              []
-            end
+      File.readlines(path).map(&:chomp)
+    rescue Errno::ENOENT
+      []
+    end
 
     owner_re = /\S+/
 
@@ -226,7 +227,7 @@ class Parsers
         # Could be used in the future to reconstruct the file
         Entry.new(base)
       when /^((\S+)\s+)(#{owner_re}( #{owner_re})*)$/
-        base.merge!(pattern: $2, indent: ($1).length, owners: $3.split(' '))
+        base.merge!(pattern: $2, indent: ($1).length, owners: $3.split)
         OwnerEntry.new(base)
       else
         Entry.new(base).tap do |entry|
@@ -244,10 +245,10 @@ class Parsers
 
   def parse_ignore_file(path, options)
     lines = begin
-              IO.readlines(path).map(&:chomp)
-            rescue Errno::ENOENT
-              []
-            end
+      File.readlines(path).map(&:chomp)
+    rescue Errno::ENOENT
+      []
+    end
 
     patterns = Set.new
     files = Set.new
@@ -280,11 +281,11 @@ class Parsers
   end
 
   def parse_validowners(path)
-    begin
-      IO.readlines(path).map(&:chomp)
-    rescue Errno::ENOENT
+
+      File.readlines(path).map(&:chomp)
+  rescue Errno::ENOENT
       nil
-    end
+
   end
 end
 
@@ -303,7 +304,7 @@ class Repository
   end
 
   def codeowners_ignore_file
-    @codeowners_ignore_file ||= codeowners_file + ".ignore"
+    @codeowners_ignore_file ||= "#{codeowners_file}.ignore"
   end
 
   def validowners_file
@@ -428,7 +429,7 @@ def check_individual_patterns(owner_entries)
   match_map = {}
   warnings = []
 
-  matched_files_collection = MultiGitLsRunner.new(owner_entries.map { |e| e.pattern }).run
+  matched_files_collection = MultiGitLsRunner.new(owner_entries.map(&:pattern)).run
 
   owner_entries.each do |entry|
     matched_files = matched_files_collection[entry.pattern]
@@ -475,11 +476,11 @@ def report_who_owns(owner_entries, show_json, files)
   match_map = check_individual_patterns(owner_entries).match_map
 
   results = files.map do |file|
-    file = file.sub(/^\.\/+/, '')
+    file = file.sub(%r{^\./+}, '')
     matches = match_map[file]
     owners = if matches
-      matches.map(&:owners).flatten.sort.uniq
-    end
+               matches.map(&:owners).flatten.sort.uniq
+             end
     { file: file, owners: owners || [] }
   end
 
@@ -491,11 +492,11 @@ def report_files_owned(owner_entries, show_json, args)
   # run git ls-files per owner, not per pattern. But we already have
   # the code, so it's convenient.
   match_map = if args.any?
-    # Discards warnings
-    check_individual_patterns(owner_entries).match_map
-  else
-    {}
-  end
+                # Discards warnings
+                check_individual_patterns(owner_entries).match_map
+              else
+                {}
+              end
 
   results = get_all_files.map do |file|
     matches = match_map[file]

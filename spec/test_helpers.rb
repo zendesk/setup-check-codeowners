@@ -1,9 +1,10 @@
+# frozen_string_literal: true
+
 require 'fileutils'
 require 'open3'
 require 'tmpdir'
 
 module TestHelpers
-
   CODEOWNERS_EXECUTABLE = File.expand_path(
     File.join(
       File.dirname(__FILE__),
@@ -58,7 +59,7 @@ module TestHelpers
       @files.each do |file|
         path = File.join(dir, file)
         FileUtils.mkdir_p(File.dirname(path))
-        File.open(path, 'w') { }
+        File.open(path, 'w') {}
       end
 
       # Untested: putting these files in the root, or in "docs".
@@ -88,5 +89,4 @@ module TestHelpers
   def help_message
     HELP_MESSAGE
   end
-
 end

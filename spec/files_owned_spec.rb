@@ -1,9 +1,10 @@
+# frozen_string_literal: true
+
 require_relative './test_helpers'
 
 RSpec.configure { |c| c.include TestHelpers }
 
 RSpec.describe "check-codeowners --files-owned" do
-
   before do
     setup
   end
@@ -53,5 +54,4 @@ RSpec.describe "check-codeowners --files-owned" do
 
     expect_silent_success { run "--files-owned" }
   end
-
 end

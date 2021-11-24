@@ -1,9 +1,10 @@
+# frozen_string_literal: true
+
 require_relative './test_helpers'
 
 RSpec.configure { |c| c.include TestHelpers }
 
 RSpec.describe "check-codeowners --who-owns" do
-
   before do
     setup
   end
@@ -61,5 +62,4 @@ RSpec.describe "check-codeowners --who-owns" do
       expect(r.stderr).to eq("")
     end
   end
-
 end
