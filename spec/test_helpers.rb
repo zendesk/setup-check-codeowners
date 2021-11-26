@@ -10,7 +10,7 @@ module TestHelpers
       "..",
       "bin",
       "check-codeowners",
-      )
+    )
   )
 
   HELP_MESSAGE = "For help, see https://github.com/zendesk/setup-check-codeowners/blob/main/Usage.md\n"
@@ -61,6 +61,7 @@ module TestHelpers
         File.open(path, 'w') { }
       end
 
+      # Untested: putting these files in the root, or in "docs".
       write_file(dir, ".github/CODEOWNERS", @codeowners)
       write_file(dir, ".github/CODEOWNERS.ignore", @codeowners_ignore)
       write_file(dir, ".github/VALIDOWNERS", @valid_owners)
