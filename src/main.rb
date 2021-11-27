@@ -22,7 +22,6 @@ options = GetOptions.new(ARGV)
 
 repo = Repository.new
 
-
 if options.who_owns
   Reports.new(repo, options).who_owns
   exit
@@ -32,8 +31,6 @@ if options.files_owned
   Reports.new(repo, options).files_owned
   exit
 end
-
-# CHECK MODE
 
 checker = CheckRunner.new(repo, options)
 checker.show_checks
