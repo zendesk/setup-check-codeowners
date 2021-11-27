@@ -13,7 +13,8 @@ module CheckCodeowners
 
     attr_reader :repo, :options
 
-    def check_sorted(owner_entries)
+    def check_sorted
+      owner_entries = repo.codeowners.owner_entries
       errors = []
 
       # We could auto-fix this, if it wasn't for comments and blank lines
@@ -30,7 +31,8 @@ module CheckCodeowners
       Struct.new(:errors).new(errors)
     end
 
-    def check_indent(owner_entries)
+    def check_indent
+      owner_entries = repo.codeowners.owner_entries
       errors = []
 
       # We could auto-fix this
@@ -47,7 +49,9 @@ module CheckCodeowners
       Struct.new(:errors).new(errors)
     end
 
-    def check_valid_owners(owner_entries)
+    def check_valid_owners
+      owner_entries = repo.codeowners.owner_entries
+
       # This is just to catch typos.
       # We could look up against github, of course.
       # For now, hard-wired is better than nothing.
@@ -75,8 +79,13 @@ module CheckCodeowners
 
     # Warns if there are entries in the ignore file that are now owned
     # Errors if there are files that don't have an owner (except if the file is included in ignore)
-    def check_unowned_files(unowned_files)
-      unowned_files = Set.new(unowned_files)
+    def check_unowned_files
+      all_files = repo.git_ls.all_files.to_set
+      owned_files = repo.git_ls.matching_files(
+        repo.codeowners.owner_entries.map(&:pattern)
+      ).to_set
+      unowned_files = (all_files - owned_files).to_set
+
       ignore_file = repo.codeowners_ignore
 
       warnings = []
@@ -131,30 +140,29 @@ module CheckCodeowners
       errors.concat(repo.codeowners.errors)
 
       if options.should_check_sorted
-        r = check_sorted(owner_entries)
+        r = check_sorted
         errors.concat(r.errors)
       end
 
       if options.should_check_indent
-        r = check_indent(owner_entries)
+        r = check_indent
         errors.concat(r.errors)
       end
 
       if options.should_check_valid_owners
-        r = check_valid_owners(owner_entries)
+        r = check_valid_owners
         errors.concat(r.errors)
       end
 
-      all_files = repo.git_ls.all_files
-
       if options.check_unowned
-        all_files = repo.git_ls.all_files.to_set
-        owned_files = repo.git_ls.matching_files(owner_entries.map(&:pattern)).to_set
-        unowned = (all_files - owned_files).sort
-        r = check_unowned_files(unowned)
+        r = check_unowned_files
         warnings.concat(r.warnings)
         errors.concat(r.errors)
       end
+
+      all_files = if options.debug
+                    repo.git_ls.all_files.sort
+                  end
 
       match_map = if options.find_redundant_ignores
                     warnings.concat(repo.individual_pattern_checker.warnings)
