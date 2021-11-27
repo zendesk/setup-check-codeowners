@@ -8,12 +8,8 @@ class Repository
   # The repository directory is always the current directory.
   # Maybe that could be changed one day.
 
-  def codeowners_file
-    @codeowners_file ||= find_codeowners_file
-  end
-
-  def codeowners_entries
-    @codeowners_entries ||= Parsers.new.parse_codeowners_file(codeowners_file)
+  def codeowners
+    @codeowners ||= Codeowners.new(codeowners_file)
   end
 
   def codeowners_ignore
@@ -25,6 +21,10 @@ class Repository
   end
 
   private
+
+  def codeowners_file
+    @codeowners_file ||= find_codeowners_file
+  end
 
   def codeowners_ignore_file
     @codeowners_ignore_file ||= codeowners_file + ".ignore"

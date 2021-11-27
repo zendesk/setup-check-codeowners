@@ -6,10 +6,10 @@ require 'tempfile'
 
 require_relative 'lib/check_codeowners/multi_git_ls_runner'
 require_relative 'lib/check_codeowners/entry'
+require_relative 'lib/check_codeowners/codeowners'
 require_relative 'lib/check_codeowners/codeowners_ignore'
 require_relative 'lib/check_codeowners/owner_entry'
 require_relative 'lib/check_codeowners/get_options'
-require_relative 'lib/check_codeowners/parsers'
 require_relative 'lib/check_codeowners/repository'
 require_relative 'lib/check_codeowners/valid_owners'
 
@@ -224,7 +224,7 @@ def check_unowned_files(repo, unowned_files, options)
   non_ignored_files.sort.each do |file|
     errors << {
       code: "non_ignored_files",
-      message: "Please add this file to #{repo.codeowners_file}: #{file}", # This file does not have an owner
+      message: "Please add this file to #{repo.codeowners.path}: #{file}", # This file does not have an owner
       unowned: file,
     }
   end
@@ -241,11 +241,11 @@ def check_unowned_files(repo, unowned_files, options)
   Struct.new(:warnings, :errors).new(warnings, errors)
 end
 
-def run_all_checks(repo, parse_results, owner_entries, options)
+def run_all_checks(repo, codeowners, owner_entries, options)
   warnings = []
   errors = []
 
-  errors.concat(parse_results.errors)
+  errors.concat(codeowners.errors)
 
   if options.should_check_sorted
     r = check_sorted(owner_entries)
@@ -314,11 +314,7 @@ options = GetOptions.new(ARGV)
 
 repo = Repository.new
 
-parse_results = repo.codeowners_entries
-entries = parse_results.entries
-# parse_results.errors is handled by run_all_checks
-
-owner_entries = entries.select { |entry| entry.is_a?(OwnerEntry) }
+owner_entries = repo.codeowners.owner_entries
 
 if options.who_owns
   files = (options.args.empty? ? get_all_files : options.args)
@@ -333,7 +329,7 @@ end
 
 # CHECK MODE
 
-r = run_all_checks(repo, parse_results, owner_entries, options)
+r = run_all_checks(repo, repo.codeowners, owner_entries, options)
 
 if options.strict
   r.errors.concat(r.warnings)
@@ -341,7 +337,7 @@ if options.strict
 end
 
 if options.show_json
-  show_checks_json(entries, owner_entries, r, options)
+  show_checks_json(repo.codeowners.entries, owner_entries, r, options)
 else
   show_checks_text(r)
 end

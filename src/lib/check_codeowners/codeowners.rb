@@ -1,5 +1,18 @@
-class Parsers
-  def parse_codeowners_file(path)
+class Codeowners
+  def initialize(path)
+    @path = path
+    parse
+  end
+
+  attr_reader :path, :entries, :errors
+
+  def owner_entries
+    @owner_entries ||= entries.select { |e| e.is_a?(OwnerEntry) }
+  end
+
+  private
+
+  def parse
     lines = begin
               IO.readlines(path).map(&:chomp)
             rescue Errno::ENOENT
@@ -31,6 +44,7 @@ class Parsers
       end
     end
 
-    Struct.new(:entries, :errors).new(entries, errors)
+    @entries = entries
+    @errors = errors
   end
 end
