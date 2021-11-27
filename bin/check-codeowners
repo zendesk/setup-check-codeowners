@@ -1,4 +1,4 @@
-#!/usr/bin/ruby
+#!/usr/bin/env ruby
 
 # This is a generated file; for the source, see 'src'.
 # Build with "ruby ./script/build.rb"

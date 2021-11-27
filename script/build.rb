@@ -1,4 +1,4 @@
-#!/usr/bin/ruby
+#!/usr/bin/env ruby
 
 require 'tempfile'
 
@@ -21,7 +21,7 @@ output = "bin/check-codeowners"
 Tempfile.open('build', File.dirname(output)) do |out|
 
   out.print <<~INTRO
-    #!/usr/bin/ruby
+    #!/usr/bin/env ruby
 
     # This is a generated file; for the source, see 'src'.
     # Build with "ruby ./script/build.rb"
