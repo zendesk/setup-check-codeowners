@@ -24,8 +24,8 @@ class Repository
     @codeowners_entries ||= Parsers.new.parse_codeowners_file(codeowners_file)
   end
 
-  def ignore_entries(options)
-    @ignore_entries ||= Parsers.new.parse_ignore_file(codeowners_ignore_file, options)
+  def ignore_file
+    @ignore_file ||= IgnoreFile.new(codeowners_ignore_file)
   end
 
   def validowners_entries

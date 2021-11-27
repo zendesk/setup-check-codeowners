@@ -6,6 +6,7 @@ require 'tempfile'
 
 require_relative 'lib/check_codeowners/multi_git_ls_runner'
 require_relative 'lib/check_codeowners/entry'
+require_relative 'lib/check_codeowners/ignore_file'
 require_relative 'lib/check_codeowners/owner_entry'
 require_relative 'lib/check_codeowners/get_options'
 require_relative 'lib/check_codeowners/parsers'
@@ -193,21 +194,24 @@ end
 # Errors if there are files that don't have an owner (except if the file is included in ignore)
 def check_unowned_files(repo, unowned_files, options)
   unowned_files = Set.new(unowned_files)
-
-  parsed = repo.ignore_entries(options)
+  ignore_file = repo.ignore_file
 
   warnings = []
-  errors = [*parsed.errors]
+  errors = []
   used_ignores = Set.new
   ignored_unowned = Set.new
 
+  if options.should_check_sorted
+    errors.concat(ignore_file.check_sorted)
+  end
+
   unowned_files.each do |unowned_file|
-    if parsed.files.include?(unowned_file)
+    if ignore_file.files.include?(unowned_file)
       ignored_unowned.add(unowned_file)
       used_ignores.add(unowned_file)
     end
 
-    parsed.patterns.each do |ignore_pattern|
+    ignore_file.patterns.each do |ignore_pattern|
       if File.fnmatch?(ignore_pattern, unowned_file)
         ignored_unowned.add(unowned_file)
         used_ignores.add(ignore_pattern)
@@ -224,7 +228,7 @@ def check_unowned_files(repo, unowned_files, options)
     }
   end
 
-  unused_ignores = (parsed.files + parsed.patterns) - used_ignores
+  unused_ignores = (ignore_file.files + ignore_file.patterns) - used_ignores.to_a
   unused_ignores.sort.each do |unused_ignore|
     warnings << {
       code: "unused_ignore",

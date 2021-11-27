@@ -3,12 +3,14 @@
 # This is a generated file; for the source, see 'src'.
 # Build with "ruby ./script/build.rb"
 
+#line 1 "src/main.rb"
 #!/usr/bin/env ruby
 
 require 'set'
 require 'shellwords'
 require 'tempfile'
 
+#line 1 "src/lib/check_codeowners/multi_git_ls_runner.rb"
 require 'etc'
 require 'shellwords'
 require 'tempfile'
@@ -82,6 +84,8 @@ class MultiGitLsRunner
   end
 end
 
+#line 8 "src/main.rb"
+#line 1 "src/lib/check_codeowners/entry.rb"
 class Entry
   def initialize(text:, file:, line_number:)
     @text = text
@@ -100,6 +104,77 @@ class Entry
   end
 end
 
+#line 9 "src/main.rb"
+#line 1 "src/lib/check_codeowners/ignore_file.rb"
+class IgnoreFile
+  Entry = Struct.new(:text, :filename, :line_number, keyword_init: true)
+
+  def initialize(path)
+    @path = path
+  end
+
+  def check_sorted
+    errors = []
+    previous_text = nil
+
+    entries.each do |entry|
+      if previous_text && entry.text <= previous_text
+        errors << {
+          message: "Line is duplicated or out of sequence at #{entry.filename}:#{entry.line_number}",
+          code: "ignore_file_not_in_sequence",
+          file: entry.filename,
+          line: entry.line_number,
+        }
+      end
+
+      previous_text = entry.text
+    end
+
+    errors
+  end
+
+  def patterns
+    patterns_and_files[0]
+  end
+
+  def files
+    patterns_and_files[1]
+  end
+
+  private
+
+  attr_reader :path
+
+  def entries
+    return @entries if defined? @entries
+
+    lines = begin
+              IO.readlines(path).map(&:chomp)
+            rescue Errno::ENOENT
+              []
+            end
+
+    entries = []
+
+    lines.each_with_index do |line, index|
+      next if line.empty? || line.start_with?("#")
+      entries << Entry.new(
+        text: line.chomp,
+        filename: path,
+        line_number: index + 1,
+      )
+    end
+
+    @entries = entries
+  end
+
+  def patterns_and_files
+    @patterns_and_files ||= entries.map(&:text).partition { |text| text.include?("*") }
+  end
+end
+
+#line 10 "src/main.rb"
+#line 1 "src/lib/check_codeowners/owner_entry.rb"
 class OwnerEntry < Entry
   def initialize(text:, file:, line_number:, pattern:, owners:, indent:)
     super(text: text, file: file, line_number: line_number)
@@ -115,6 +190,8 @@ class OwnerEntry < Entry
   end
 end
 
+#line 11 "src/main.rb"
+#line 1 "src/lib/check_codeowners/get_options.rb"
 require 'optparse'
 
 class GetOptions
@@ -212,6 +289,8 @@ class GetOptions
   end
 end
 
+#line 12 "src/main.rb"
+#line 1 "src/lib/check_codeowners/parsers.rb"
 class Parsers
   def parse_codeowners_file(path)
     lines = begin
@@ -248,43 +327,6 @@ class Parsers
     Struct.new(:entries, :errors).new(entries, errors)
   end
 
-  def parse_ignore_file(path, options)
-    lines = begin
-              IO.readlines(path).map(&:chomp)
-            rescue Errno::ENOENT
-              []
-            end
-
-    patterns = Set.new
-    files = Set.new
-    previous_line = nil
-
-    errors = []
-
-    lines.each_with_index do |line, index|
-      next if line.empty? || line.start_with?("#")
-
-      if previous_line && line <= previous_line && options.should_check_sorted
-        errors << {
-          message: "Line is duplicated or out of sequence at #{path}:#{index + 1}",
-          code: "ignore_file_not_in_sequence",
-          file: path,
-          line: index + 1,
-        }
-      end
-
-      previous_line = line
-
-      if line.include?("*")
-        patterns << line
-      else
-        files << line
-      end
-    end
-
-    Struct.new(:patterns, :files, :errors).new(patterns, files, errors)
-  end
-
   def parse_validowners(path)
     begin
       IO.readlines(path).map(&:chomp)
@@ -294,6 +336,8 @@ class Parsers
   end
 end
 
+#line 13 "src/main.rb"
+#line 1 "src/lib/check_codeowners/repository.rb"
 class Repository
   CODEOWNERS_PATHS = [
     "CODEOWNERS",
@@ -320,8 +364,8 @@ class Repository
     @codeowners_entries ||= Parsers.new.parse_codeowners_file(codeowners_file)
   end
 
-  def ignore_entries(options)
-    @ignore_entries ||= Parsers.new.parse_ignore_file(codeowners_ignore_file, options)
+  def ignore_file
+    @ignore_file ||= IgnoreFile.new(codeowners_ignore_file)
   end
 
   def validowners_entries
@@ -338,6 +382,7 @@ class Repository
   end
 end
 
+#line 14 "src/main.rb"
 
 def check_sorted(owner_entries)
   errors = []
@@ -521,21 +566,24 @@ end
 # Errors if there are files that don't have an owner (except if the file is included in ignore)
 def check_unowned_files(repo, unowned_files, options)
   unowned_files = Set.new(unowned_files)
-
-  parsed = repo.ignore_entries(options)
+  ignore_file = repo.ignore_file
 
   warnings = []
-  errors = [*parsed.errors]
+  errors = []
   used_ignores = Set.new
   ignored_unowned = Set.new
 
+  if options.should_check_sorted
+    errors.concat(ignore_file.check_sorted)
+  end
+
   unowned_files.each do |unowned_file|
-    if parsed.files.include?(unowned_file)
+    if ignore_file.files.include?(unowned_file)
       ignored_unowned.add(unowned_file)
       used_ignores.add(unowned_file)
     end
 
-    parsed.patterns.each do |ignore_pattern|
+    ignore_file.patterns.each do |ignore_pattern|
       if File.fnmatch?(ignore_pattern, unowned_file)
         ignored_unowned.add(unowned_file)
         used_ignores.add(ignore_pattern)
@@ -552,7 +600,7 @@ def check_unowned_files(repo, unowned_files, options)
     }
   end
 
-  unused_ignores = (parsed.files + parsed.patterns) - used_ignores
+  unused_ignores = (ignore_file.files + ignore_file.patterns) - used_ignores.to_a
   unused_ignores.sort.each do |unused_ignore|
     warnings << {
       code: "unused_ignore",
