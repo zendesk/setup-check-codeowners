@@ -9,548 +9,390 @@ require 'set'
 require 'shellwords'
 require 'tempfile'
 
-class CheckRunner
-  def initialize(repo, options)
-    @repo = repo
-    @options = options
-  end
-
-  def show_checks
-    r = Checks.new(repo, options).results
-
-    if options.strict
-      r.errors.concat(r.warnings)
-      r.warnings = []
+module CheckCodeowners
+  class CheckRunner
+    def initialize(repo, options)
+      @repo = repo
+      @options = options
     end
 
-    if options.show_json
-      show_checks_json(r)
-    else
-      show_checks_text(r)
-    end
+    def show_checks
+      r = Checks.new(repo, options).results
 
-    @has_errors = r.errors.any?
-  end
-
-  def errors?
-    @has_errors
-  end
-
-  private
-
-  attr_reader :repo, :options
-
-  def show_checks_json(r)
-    output = {
-      errors: r.errors,
-      warnings: r.warnings
-    }
-
-    if options.debug
-      output.merge!(
-        entries: report.codeowners.entries,
-        owner_entries: report.codeowners.owner_entries,
-        all_files: r.all_files,
-        match_map: r.match_map,
-      )
-    end
-
-    require 'json'
-    puts JSON.pretty_generate(output)
-  end
-
-  def show_checks_text(r)
-    r.errors.each { |item| puts "ERROR: #{item[:message]}" }
-    r.warnings.each { |item| puts "WARNING: #{item[:message]}" }
-
-    if r.errors.any? || r.warnings.any?
-      puts "For help, see https://github.com/zendesk/setup-check-codeowners/blob/main/Usage.md"
-    end
-  end
-end
-
-class Checks
-  def initialize(repo, options)
-    @repo = repo
-    @options = options
-  end
-
-  def results
-    @results ||= run_all_checks
-  end
-
-  private
-
-  attr_reader :repo, :options
-
-  def check_sorted(owner_entries)
-    errors = []
-
-    # We could auto-fix this, if it wasn't for comments and blank lines
-    owner_entries.each_with_index.select do |entry, index|
-      if index > 0 && entry.pattern <= owner_entries[index - 1].pattern
-        errors << {
-          code: "codeowners_file_not_in_sequence",
-          message: "Line is duplicated or out of sequence at #{entry.file}:#{entry.line_number}",
-          entry: entry
-        }
-      end
-    end
-
-    Struct.new(:errors).new(errors)
-  end
-
-  def check_indent(owner_entries)
-    errors = []
-
-    # We could auto-fix this
-    owner_entries.each_with_index.select do |entry, index|
-      if index > 0 && entry.indent != owner_entries[index - 1].indent
-        errors << {
-          code: "mismatched_indent",
-          message: "Mismatched indent at #{entry.file}:#{entry.line_number}",
-          entry: entry
-        }
-      end
-    end
-
-    Struct.new(:errors).new(errors)
-  end
-
-  def check_valid_owners(owner_entries)
-    # This is just to catch typos.
-    # We could look up against github, of course.
-    # For now, hard-wired is better than nothing.
-    valid_owners = repo.valid_owners.valid_owners
-
-    errors = []
-
-    if valid_owners
-      owner_entries.each do |entry|
-        bad_owners = entry.owners - valid_owners
-
-        bad_owners.each do |bad_owner|
-          errors << {
-            code: "invalid_owner",
-            message: "Invalid owner #{bad_owner} at #{entry.file}:#{entry.line_number}",
-            bad_owner: bad_owner,
-            entry: entry
-          }
-        end
-      end
-    end
-
-    Struct.new(:errors).new(errors)
-  end
-
-  # Warns if there are entries in the ignore file that are now owned
-  # Errors if there are files that don't have an owner (except if the file is included in ignore)
-  def check_unowned_files(unowned_files)
-    unowned_files = Set.new(unowned_files)
-    ignore_file = repo.codeowners_ignore
-
-    warnings = []
-    errors = []
-    used_ignores = Set.new
-    ignored_unowned = Set.new
-
-    if options.should_check_sorted
-      errors.concat(ignore_file.check_sorted)
-    end
-
-    unowned_files.each do |unowned_file|
-      if ignore_file.files.include?(unowned_file)
-        ignored_unowned.add(unowned_file)
-        used_ignores.add(unowned_file)
+      if options.strict
+        r.errors.concat(r.warnings)
+        r.warnings = []
       end
 
-      ignore_file.patterns.each do |ignore_pattern|
-        if File.fnmatch?(ignore_pattern, unowned_file)
-          ignored_unowned.add(unowned_file)
-          used_ignores.add(ignore_pattern)
-        end
-      end
-    end
-
-    non_ignored_files = unowned_files - ignored_unowned
-    non_ignored_files.sort.each do |file|
-      errors << {
-        code: "non_ignored_files",
-        message: "Please add this file to #{repo.codeowners.path}: #{file}", # This file does not have an owner
-        unowned: file,
-      }
-    end
-
-    unused_ignores = (ignore_file.files + ignore_file.patterns) - used_ignores.to_a
-    unused_ignores.sort.each do |unused_ignore|
-      warnings << {
-        code: "unused_ignore",
-        message: "The following entry in #{ignore_file.path} doesn't match any unowned files and should be removed: #{unused_ignore}", # Obsolete entry
-        unused_ignore: unused_ignore,
-      }
-    end
-
-    Struct.new(:warnings, :errors).new(warnings, errors)
-  end
-
-  def run_all_checks
-    warnings = []
-    errors = []
-
-    owner_entries = repo.codeowners.owner_entries
-    errors.concat(repo.codeowners.errors)
-
-    if options.should_check_sorted
-      r = check_sorted(owner_entries)
-      errors.concat(r.errors)
-    end
-
-    if options.should_check_indent
-      r = check_indent(owner_entries)
-      errors.concat(r.errors)
-    end
-
-    if options.should_check_valid_owners
-      r = check_valid_owners(owner_entries)
-      errors.concat(r.errors)
-    end
-
-    all_files = repo.git_ls.all_files
-
-    if options.check_unowned
-      all_files = repo.git_ls.all_files.to_set
-      owned_files = repo.git_ls.matching_files(owner_entries.map(&:pattern)).to_set
-      unowned = (all_files - owned_files).sort
-      r = check_unowned_files(unowned)
-      warnings.concat(r.warnings)
-      errors.concat(r.errors)
-    end
-
-    match_map = if options.find_redundant_ignores
-                  warnings.concat(repo.individual_pattern_checker.warnings)
-                  repo.individual_pattern_checker.match_map
-                end
-
-    Struct.new(:errors, :warnings, :all_files, :match_map).new(errors, warnings, all_files, match_map)
-  end
-end
-
-class Codeowners
-  def initialize(path)
-    @path = path
-    parse
-  end
-
-  attr_reader :path, :entries, :errors
-
-  def owner_entries
-    @owner_entries ||= entries.select { |e| e.is_a?(OwnerEntry) }
-  end
-
-  private
-
-  def parse
-    lines = begin
-              IO.readlines(path).map(&:chomp)
-            rescue Errno::ENOENT
-              []
-            end
-
-    owner_re = /\S+/
-
-    errors = []
-
-    entries = lines.each_with_index.map do |line, index|
-      base = { line_number: index + 1, text: line, file: path }
-
-      case line
-      when "", /^#/
-        # Could be used in the future to reconstruct the file
-        Entry.new(base)
-      when /^((\S+)\s+)(#{owner_re}( #{owner_re})*)$/
-        base.merge!(pattern: $2, indent: ($1).length, owners: $3.split(' '))
-        OwnerEntry.new(base)
+      if options.show_json
+        show_checks_json(r)
       else
-        Entry.new(base).tap do |entry|
+        show_checks_text(r)
+      end
+
+      @has_errors = r.errors.any?
+    end
+
+    def errors?
+      @has_errors
+    end
+
+    private
+
+    attr_reader :repo, :options
+
+    def show_checks_json(r)
+      output = {
+        errors: r.errors,
+        warnings: r.warnings
+      }
+
+      if options.debug
+        output.merge!(
+          entries: report.codeowners.entries,
+          owner_entries: report.codeowners.owner_entries,
+          all_files: r.all_files,
+          match_map: r.match_map,
+        )
+      end
+
+      require 'json'
+      puts JSON.pretty_generate(output)
+    end
+
+    def show_checks_text(r)
+      r.errors.each { |item| puts "ERROR: #{item[:message]}" }
+      r.warnings.each { |item| puts "WARNING: #{item[:message]}" }
+
+      if r.errors.any? || r.warnings.any?
+        puts "For help, see https://github.com/zendesk/setup-check-codeowners/blob/main/Usage.md"
+      end
+    end
+  end
+end
+
+module CheckCodeowners
+  class Checks
+    def initialize(repo, options)
+      @repo = repo
+      @options = options
+    end
+
+    def results
+      @results ||= run_all_checks
+    end
+
+    private
+
+    attr_reader :repo, :options
+
+    def check_sorted(owner_entries)
+      errors = []
+
+      # We could auto-fix this, if it wasn't for comments and blank lines
+      owner_entries.each_with_index.select do |entry, index|
+        if index > 0 && entry.pattern <= owner_entries[index - 1].pattern
           errors << {
-            code: "unrecognised_line",
-            message: "Unrecognised line at #{entry.file}:#{entry.line_number}",
+            code: "codeowners_file_not_in_sequence",
+            message: "Line is duplicated or out of sequence at #{entry.file}:#{entry.line_number}",
             entry: entry
           }
         end
       end
+
+      Struct.new(:errors).new(errors)
     end
 
-    @entries = entries
-    @errors = errors
-  end
-end
+    def check_indent(owner_entries)
+      errors = []
 
-class CodeownersIgnore
-  Entry = Struct.new(:text, :filename, :line_number, keyword_init: true)
+      # We could auto-fix this
+      owner_entries.each_with_index.select do |entry, index|
+        if index > 0 && entry.indent != owner_entries[index - 1].indent
+          errors << {
+            code: "mismatched_indent",
+            message: "Mismatched indent at #{entry.file}:#{entry.line_number}",
+            entry: entry
+          }
+        end
+      end
 
-  def initialize(path)
-    @path = path
-  end
+      Struct.new(:errors).new(errors)
+    end
 
-  attr_reader :path
+    def check_valid_owners(owner_entries)
+      # This is just to catch typos.
+      # We could look up against github, of course.
+      # For now, hard-wired is better than nothing.
+      valid_owners = repo.valid_owners.valid_owners
 
-  def check_sorted
-    errors = []
-    previous_text = nil
+      errors = []
 
-    entries.each do |entry|
-      if previous_text && entry.text <= previous_text
+      if valid_owners
+        owner_entries.each do |entry|
+          bad_owners = entry.owners - valid_owners
+
+          bad_owners.each do |bad_owner|
+            errors << {
+              code: "invalid_owner",
+              message: "Invalid owner #{bad_owner} at #{entry.file}:#{entry.line_number}",
+              bad_owner: bad_owner,
+              entry: entry
+            }
+          end
+        end
+      end
+
+      Struct.new(:errors).new(errors)
+    end
+
+    # Warns if there are entries in the ignore file that are now owned
+    # Errors if there are files that don't have an owner (except if the file is included in ignore)
+    def check_unowned_files(unowned_files)
+      unowned_files = Set.new(unowned_files)
+      ignore_file = repo.codeowners_ignore
+
+      warnings = []
+      errors = []
+      used_ignores = Set.new
+      ignored_unowned = Set.new
+
+      if options.should_check_sorted
+        errors.concat(ignore_file.check_sorted)
+      end
+
+      unowned_files.each do |unowned_file|
+        if ignore_file.files.include?(unowned_file)
+          ignored_unowned.add(unowned_file)
+          used_ignores.add(unowned_file)
+        end
+
+        ignore_file.patterns.each do |ignore_pattern|
+          if File.fnmatch?(ignore_pattern, unowned_file)
+            ignored_unowned.add(unowned_file)
+            used_ignores.add(ignore_pattern)
+          end
+        end
+      end
+
+      non_ignored_files = unowned_files - ignored_unowned
+      non_ignored_files.sort.each do |file|
         errors << {
-          message: "Line is duplicated or out of sequence at #{entry.filename}:#{entry.line_number}",
-          code: "ignore_file_not_in_sequence",
-          file: entry.filename,
-          line: entry.line_number,
+          code: "non_ignored_files",
+          message: "Please add this file to #{repo.codeowners.path}: #{file}", # This file does not have an owner
+          unowned: file,
         }
       end
 
-      previous_text = entry.text
+      unused_ignores = (ignore_file.files + ignore_file.patterns) - used_ignores.to_a
+      unused_ignores.sort.each do |unused_ignore|
+        warnings << {
+          code: "unused_ignore",
+          message: "The following entry in #{ignore_file.path} doesn't match any unowned files and should be removed: #{unused_ignore}", # Obsolete entry
+          unused_ignore: unused_ignore,
+        }
+      end
+
+      Struct.new(:warnings, :errors).new(warnings, errors)
     end
 
-    errors
-  end
+    def run_all_checks
+      warnings = []
+      errors = []
 
-  def patterns
-    patterns_and_files[0]
-  end
+      owner_entries = repo.codeowners.owner_entries
+      errors.concat(repo.codeowners.errors)
 
-  def files
-    patterns_and_files[1]
-  end
+      if options.should_check_sorted
+        r = check_sorted(owner_entries)
+        errors.concat(r.errors)
+      end
 
-  private
+      if options.should_check_indent
+        r = check_indent(owner_entries)
+        errors.concat(r.errors)
+      end
 
-  def entries
-    return @entries if defined? @entries
+      if options.should_check_valid_owners
+        r = check_valid_owners(owner_entries)
+        errors.concat(r.errors)
+      end
 
-    lines = begin
-              IO.readlines(path).map(&:chomp)
-            rescue Errno::ENOENT
-              []
-            end
+      all_files = repo.git_ls.all_files
 
-    entries = []
+      if options.check_unowned
+        all_files = repo.git_ls.all_files.to_set
+        owned_files = repo.git_ls.matching_files(owner_entries.map(&:pattern)).to_set
+        unowned = (all_files - owned_files).sort
+        r = check_unowned_files(unowned)
+        warnings.concat(r.warnings)
+        errors.concat(r.errors)
+      end
 
-    lines.each_with_index do |line, index|
-      next if line.empty? || line.start_with?("#")
-      entries << Entry.new(
-        text: line.chomp,
-        filename: path,
-        line_number: index + 1,
-      )
+      match_map = if options.find_redundant_ignores
+                    warnings.concat(repo.individual_pattern_checker.warnings)
+                    repo.individual_pattern_checker.match_map
+                  end
+
+      Struct.new(:errors, :warnings, :all_files, :match_map).new(errors, warnings, all_files, match_map)
     end
-
-    @entries = entries
-  end
-
-  def patterns_and_files
-    @patterns_and_files ||= entries.map(&:text).partition { |text| text.include?("*") }
-  end
-end
-
-class Entry
-  def initialize(text:, file:, line_number:)
-    @text = text
-    @file = file
-    @line_number = line_number
-  end
-
-  attr_reader :text, :file, :line_number
-
-  def to_json(*args)
-    to_h.to_json(*args)
-  end
-
-  def to_h
-    { text: text, file: file, line_number: line_number }
   end
 end
 
 require 'optparse'
 
-class GetOptions
-  def initialize(argv)
-    @debug = false
-    @show_json = false
-    @strict = false
-    @find_redundant_ignores = false
-    @who_owns = false
-    @files_owned = false
-    @check_unowned = false
-    @should_check_indent = true
-    @should_check_sorted = true
-    @should_check_valid_owners = true
-    read_options(argv)
-    validate
-  end
-
-  attr_reader :debug, :show_json, :strict, :find_redundant_ignores,
-              :who_owns, :files_owned,
-              :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
-              :args
-
-  private
-
-  attr_writer :debug, :show_json, :strict, :find_redundant_ignores,
-              :who_owns, :files_owned,
-              :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
-              :args
-
-  def read_options(argv)
-    parser = OptionParser.new do |opts|
-      opts.banner = "Usage: check-codeowners [options] [arguments]"
-
-      opts.on("-j", "--json", "Show results as JSON") do
-        self.show_json = true
-      end
-      opts.on("-s", "--strict", "Treat warnings as errors") do
-        self.strict = true
-      end
-      opts.on("-b", "--brute-force", "Find entries which do not match any files") do
-        self.find_redundant_ignores = true
-      end
-      opts.on("--no-check-indent", "Do not require equal indenting") do |value|
-        self.should_check_indent = value
-      end
-      opts.on("--no-check-sorted", "Do not require sorted entries") do |value|
-        self.should_check_sorted = value
-      end
-      opts.on("--no-check-valid-owners", "Do not check owners against VALIDOWNERS") do |value|
-        self.should_check_valid_owners = value
-      end
-      opts.on(
-        "--who-owns",
-        "Treat arguments as a list of files; show who owns each file, then exit." \
-        " If no arguments are given, all files are shown. Incompatible with" \
-        " --files-owned."
-      ) do
-        self.who_owns = true
-      end
-      opts.on(
-        "--files-owned",
-        "Treat arguments as a list of owners; show what files they own, then exit." \
-        " Incompatible with --who-owns."
-      ) do
-        self.files_owned = true
-      end
-      opts.on(
-        "--check-unowned",
-        "Checks if there are new files that are not owned"
-      ) do
-        self.check_unowned = true
-      end
-      opts.on("-d", "--debug", "Include debug output; implies --json") do
-        self.debug = true
-        self.show_json = true
-      end
+module CheckCodeowners
+  class GetOptions
+    def initialize(argv)
+      @debug = false
+      @show_json = false
+      @strict = false
+      @find_redundant_ignores = false
+      @who_owns = false
+      @files_owned = false
+      @check_unowned = false
+      @should_check_indent = true
+      @should_check_sorted = true
+      @should_check_valid_owners = true
+      read_options(argv)
+      validate
     end
 
-    argv = [*argv]
-    parser.parse!(argv)
-    @args = argv
-  end
+    attr_reader :debug, :show_json, :strict, :find_redundant_ignores,
+                :who_owns, :files_owned,
+                :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
+                :args
 
-  def validate
-    if who_owns && files_owned
-      $stderr.puts "Invalid usage. Try check-codeowners --help"
-      exit 2
+    private
+
+    attr_writer :debug, :show_json, :strict, :find_redundant_ignores,
+                :who_owns, :files_owned,
+                :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
+                :args
+
+    def read_options(argv)
+      parser = OptionParser.new do |opts|
+        opts.banner = "Usage: check-codeowners [options] [arguments]"
+
+        opts.on("-j", "--json", "Show results as JSON") do
+          self.show_json = true
+        end
+        opts.on("-s", "--strict", "Treat warnings as errors") do
+          self.strict = true
+        end
+        opts.on("-b", "--brute-force", "Find entries which do not match any files") do
+          self.find_redundant_ignores = true
+        end
+        opts.on("--no-check-indent", "Do not require equal indenting") do |value|
+          self.should_check_indent = value
+        end
+        opts.on("--no-check-sorted", "Do not require sorted entries") do |value|
+          self.should_check_sorted = value
+        end
+        opts.on("--no-check-valid-owners", "Do not check owners against VALIDOWNERS") do |value|
+          self.should_check_valid_owners = value
+        end
+        opts.on(
+          "--who-owns",
+          "Treat arguments as a list of files; show who owns each file, then exit." \
+          " If no arguments are given, all files are shown. Incompatible with" \
+          " --files-owned."
+        ) do
+          self.who_owns = true
+        end
+        opts.on(
+          "--files-owned",
+          "Treat arguments as a list of owners; show what files they own, then exit." \
+          " Incompatible with --who-owns."
+        ) do
+          self.files_owned = true
+        end
+        opts.on(
+          "--check-unowned",
+          "Checks if there are new files that are not owned"
+        ) do
+          self.check_unowned = true
+        end
+        opts.on("-d", "--debug", "Include debug output; implies --json") do
+          self.debug = true
+          self.show_json = true
+        end
+      end
+
+      argv = [*argv]
+      parser.parse!(argv)
+      @args = argv
     end
 
-    if !who_owns && !files_owned && args.any?
-      $stderr.puts "Invalid usage. Try check-codeowners --help"
-      exit 2
+    def validate
+      if who_owns && files_owned
+        $stderr.puts "Invalid usage. Try check-codeowners --help"
+        exit 2
+      end
+
+      if !who_owns && !files_owned && args.any?
+        $stderr.puts "Invalid usage. Try check-codeowners --help"
+        exit 2
+      end
     end
   end
 end
 
-require 'shellwords'
-require 'tempfile'
-
-class GitLs
-  def all_files
-    @all_files ||= git_ls_files(args: [])
-  end
-
-  def matching_files(patterns)
-    Tempfile.open do |tmpfile|
-      patterns.each do |pattern|
-        tmpfile.puts pattern
-      end
-
-      tmpfile.flush
-
-      git_ls_files(args: ["--cached", "--ignored", "--exclude-from", tmpfile.path])
-    end
-  end
-
-  private
-
-  def git_ls_files(args:)
-    output = `git ls-files -z #{Shellwords.shelljoin(args)}`
-    $?.success? or raise "git ls-files #{args.inspect} failed"
-
-    output.split("\0")
-  end
-end
-
-class IndividualPatternChecker
-  def initialize(owner_entries)
-    @owner_entries = owner_entries
-  end
-
-  def match_map
-    results.match_map
-  end
-
-  def warnings
-    results.warnings
-  end
-
-  private
-
-  attr_reader :owner_entries
-
-  def results
-    @results ||= check_individual_patterns
-  end
-
-  def check_individual_patterns
-    # Slow but thorough: use git to check which files each individual pattern matches
-    # May not scale well!
-
-    match_map = {}
-    warnings = []
-
-    matched_files_collection = MultiGitLsRunner.new(owner_entries.map(&:pattern)).run
-
-    owner_entries.each do |entry|
-      matched_files = matched_files_collection[entry.pattern]
-
-      # Report on any pattern which doesn't match any files (cruft)
-      if matched_files.empty?
-        warnings << {
-          code: "unmatched_pattern",
-          message: "Pattern #{entry.pattern} at #{entry.file}:#{entry.line_number} doesn't match any files",
-          entry: entry,
-        }
-      end
-
-      matched_files.each do |file|
-        (match_map[file] ||= []) << entry
-      end
+module CheckCodeowners
+  class IndividualPatternChecker
+    def initialize(owner_entries)
+      @owner_entries = owner_entries
     end
 
-    # Should we report on any file matched by more than one entry?
-    # It could indicate an unintended conflict. But what if the
-    # "conflict" is absolutely intended? Maybe it's not worth checking.
-    # Maybe "too many" owners is better than too few.
+    def match_map
+      results.match_map
+    end
 
-    Struct.new(:match_map, :warnings).new(match_map, warnings)
+    def warnings
+      results.warnings
+    end
+
+    private
+
+    attr_reader :owner_entries
+
+    def results
+      @results ||= check_individual_patterns
+    end
+
+    def check_individual_patterns
+      # Slow but thorough: use git to check which files each individual pattern matches
+      # May not scale well!
+
+      match_map = {}
+      warnings = []
+
+      matched_files_collection = MultiGitLsRunner.new(owner_entries.map(&:pattern)).run
+
+      owner_entries.each do |entry|
+        matched_files = matched_files_collection[entry.pattern]
+
+        # Report on any pattern which doesn't match any files (cruft)
+        if matched_files.empty?
+          warnings << {
+            code: "unmatched_pattern",
+            message: "Pattern #{entry.pattern} at #{entry.file}:#{entry.line_number} doesn't match any files",
+            entry: entry,
+          }
+        end
+
+        matched_files.each do |file|
+          (match_map[file] ||= []) << entry
+        end
+      end
+
+      # Should we report on any file matched by more than one entry?
+      # It could indicate an unintended conflict. But what if the
+      # "conflict" is absolutely intended? Maybe it's not worth checking.
+      # Maybe "too many" owners is better than too few.
+
+      Struct.new(:match_map, :warnings).new(match_map, warnings)
+    end
   end
 end
 
@@ -559,242 +401,441 @@ require 'shellwords'
 require 'tempfile'
 require 'tmpdir'
 
-class MultiGitLsRunner
-  PREFIX_LENGTH = 6
+module CheckCodeowners
+  class MultiGitLsRunner
+    PREFIX_LENGTH = 6
 
-  def initialize(patterns)
-    # Each arg to the script will be "<output_file>:<pattern>"
-    @inputs = patterns.sort.uniq.each_with_index.map do |pattern, index|
-      [ pattern, "%0#{PREFIX_LENGTH}d" % index ]
-    end
-  end
-
-  def run
-    with_output_dir do
-      with_splitter_script do
-        run_xargs
-        outputs_by_pattern
+    def initialize(patterns)
+      # Each arg to the script will be "<output_file>:<pattern>"
+      @inputs = patterns.sort.uniq.each_with_index.map do |pattern, index|
+        [ pattern, "%0#{PREFIX_LENGTH}d" % index ]
       end
     end
-  end
 
-  private
-
-  attr_reader :inputs
-
-  def with_output_dir
-    Dir.mktmpdir do |tmpdir|
-      @output_dir = tmpdir
-      yield
-    end
-  end
-
-  def with_splitter_script
-    Tempfile.open do |script|
-      script.puts <<~SCRIPT
-        #!/bin/bash
-        umask 077
-        exec git ls-files -z --cached --ignored --exclude "${1:#{PREFIX_LENGTH + 1}}" \
-          > #{Shellwords.escape(@output_dir)}/${1:0:#{PREFIX_LENGTH}}
-      SCRIPT
-      script.chmod 0o700
-      script.close
-
-      @splitter = script.path
-      yield
-    end
-  end
-
-  def run_xargs
-    Tempfile.open do |input_file|
-      inputs.each do |pattern, output_file|
-        input_file.puts "#{output_file}:#{pattern}"
+    def run
+      with_output_dir do
+        with_splitter_script do
+          run_xargs
+          outputs_by_pattern
+        end
       end
-      input_file.flush
-
-      system "xargs", "-n", "1", "-P", Etc.nprocessors.to_s, @splitter,
-             in: input_file.path
-      $?.success? or raise "xargs / git ls-files failed"
     end
-  end
 
-  def outputs_by_pattern
-    inputs.map do |pattern, output_file|
-      file = File.join(@output_dir, output_file)
-      results = File.read(file).split("\0")
-      [pattern, results]
-    end.to_h
+    private
+
+    attr_reader :inputs
+
+    def with_output_dir
+      Dir.mktmpdir do |tmpdir|
+        @output_dir = tmpdir
+        yield
+      end
+    end
+
+    def with_splitter_script
+      Tempfile.open do |script|
+        script.puts <<~SCRIPT
+          #!/bin/bash
+          umask 077
+          exec git ls-files -z --cached --ignored --exclude "${1:#{PREFIX_LENGTH + 1}}" \
+            > #{Shellwords.escape(@output_dir)}/${1:0:#{PREFIX_LENGTH}}
+        SCRIPT
+        script.chmod 0o700
+        script.close
+
+        @splitter = script.path
+        yield
+      end
+    end
+
+    def run_xargs
+      Tempfile.open do |input_file|
+        inputs.each do |pattern, output_file|
+          input_file.puts "#{output_file}:#{pattern}"
+        end
+        input_file.flush
+
+        system "xargs", "-n", "1", "-P", Etc.nprocessors.to_s, @splitter,
+               in: input_file.path
+        $?.success? or raise "xargs / git ls-files failed"
+      end
+    end
+
+    def outputs_by_pattern
+      inputs.map do |pattern, output_file|
+        file = File.join(@output_dir, output_file)
+        results = File.read(file).split("\0")
+        [pattern, results]
+      end.to_h
+    end
   end
 end
 
-class OwnerEntry < Entry
-  def initialize(text:, file:, line_number:, pattern:, owners:, indent:)
-    super(text: text, file: file, line_number: line_number)
-    @pattern = pattern
-    @owners = owners
-    @indent = indent
-  end
-
-  attr_reader :pattern, :owners, :indent
-
-  def to_h
-    super.merge(pattern: pattern, owners: owners, indent: indent)
-  end
-end
-
-class Reports
-  def initialize(repo, options)
-    @repo = repo
-    @options = options
-  end
-
-  attr_reader :repo, :options
-
-  def who_owns
-    files = (options.args.empty? ? repo.git_ls.all_files : options.args)
-
-    # Discards warnings
-    match_map = repo.individual_pattern_checker.match_map
-
-    results = files.map do |file|
-      file = file.sub(/^\.\/+/, '')
-      matches = match_map[file]
-      owners = if matches
-                 matches.map(&:owners).flatten.sort.uniq
-               end
-      { file: file, owners: owners || [] }
+module CheckCodeowners
+  class Reports
+    def initialize(repo, options)
+      @repo = repo
+      @options = options
     end
 
-    report_file_ownership(results, :who_owns)
-  end
+    attr_reader :repo, :options
 
-  def files_owned
-    results = repo.git_ls.all_files.map do |file|
-      # We don't *have* to brute force every pattern - we could instead
-      # run git ls-files per owner, not per pattern. But we already have
-      # the code, so it's convenient.
+    def who_owns
+      files = (options.args.empty? ? repo.git_ls.all_files : options.args)
+
       # Discards warnings
-      matches = repo.individual_pattern_checker.match_map[file]
-      next unless matches
+      match_map = repo.individual_pattern_checker.match_map
 
-      owners = matches.map(&:owners).flatten.sort.uniq & options.args
-      next unless owners.any?
+      results = files.map do |file|
+        file = file.sub(/^\.\/+/, '')
+        matches = match_map[file]
+        owners = if matches
+                   matches.map(&:owners).flatten.sort.uniq
+                 end
+        { file: file, owners: owners || [] }
+      end
 
-      { file: file, owners: owners }
-    end.compact
+      report_file_ownership(results, :who_owns)
+    end
 
-    report_file_ownership(results, :files_owned)
-  end
+    def files_owned
+      results = repo.git_ls.all_files.map do |file|
+        # We don't *have* to brute force every pattern - we could instead
+        # run git ls-files per owner, not per pattern. But we already have
+        # the code, so it's convenient.
+        # Discards warnings
+        matches = repo.individual_pattern_checker.match_map[file]
+        next unless matches
 
-  private
+        owners = matches.map(&:owners).flatten.sort.uniq & options.args
+        next unless owners.any?
 
-  def report_file_ownership(results, json_root_key)
-    if options.show_json
-      require 'json'
-      puts JSON.pretty_generate(json_root_key => results)
-    else
-      results.each do |result|
-        if result[:owners].any?
-          puts "#{result[:file]}\t#{result[:owners].join(' ')}"
-        else
-          puts "#{result[:file]}\t-"
+        { file: file, owners: owners }
+      end.compact
+
+      report_file_ownership(results, :files_owned)
+    end
+
+    private
+
+    def report_file_ownership(results, json_root_key)
+      if options.show_json
+        require 'json'
+        puts JSON.pretty_generate(json_root_key => results)
+      else
+        results.each do |result|
+          if result[:owners].any?
+            puts "#{result[:file]}\t#{result[:owners].join(' ')}"
+          else
+            puts "#{result[:file]}\t-"
+          end
         end
       end
     end
   end
-
 end
 
-class Repository
-  CODEOWNERS_PATHS = [
-    "CODEOWNERS",
-    "docs/CODEOWNERS",
-    ".github/CODEOWNERS",
-  ].freeze
+module CheckCodeowners
+  module Repository
+    class Codeowners
+      def initialize(path)
+        @path = path
+        parse
+      end
 
-  # The repository directory is always the current directory.
-  # Maybe that could be changed one day.
+      attr_reader :path, :entries, :errors
 
-  def git_ls
-    @git_ls ||= GitLs.new
-  end
+      def owner_entries
+        @owner_entries ||= entries.select { |e| e.is_a?(OwnerEntry) }
+      end
 
-  def individual_pattern_checker
-    @individual_pattern_checker ||= IndividualPatternChecker.new(codeowners.owner_entries)
-  end
+      private
 
-  def codeowners
-    @codeowners ||= Codeowners.new(codeowners_file)
-  end
+      def parse
+        lines = begin
+                  IO.readlines(path).map(&:chomp)
+                rescue Errno::ENOENT
+                  []
+                end
 
-  def codeowners_ignore
-    @codeowners_ignore ||= CodeownersIgnore.new(codeowners_ignore_file)
-  end
+        owner_re = /\S+/
 
-  def valid_owners
-    @valid_owners ||= ValidOwners.new(validowners_file)
-  end
+        errors = []
 
-  private
+        entries = lines.each_with_index.map do |line, index|
+          base = { line_number: index + 1, text: line, file: path }
 
-  def codeowners_file
-    @codeowners_file ||= find_codeowners_file
-  end
+          case line
+          when "", /^#/
+            # Could be used in the future to reconstruct the file
+            Entry.new(base)
+          when /^((\S+)\s+)(#{owner_re}( #{owner_re})*)$/
+            base.merge!(pattern: $2, indent: ($1).length, owners: $3.split(' '))
+            OwnerEntry.new(base)
+          else
+            Entry.new(base).tap do |entry|
+              errors << {
+                code: "unrecognised_line",
+                message: "Unrecognised line at #{entry.file}:#{entry.line_number}",
+                entry: entry
+              }
+            end
+          end
+        end
 
-  def codeowners_ignore_file
-    @codeowners_ignore_file ||= codeowners_file + ".ignore"
-  end
-
-  def validowners_file
-    @validowners_file ||= codeowners_file.sub(/CODEOWNERS$/, "VALIDOWNERS")
-  end
-
-  # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-file-location
-  def find_codeowners_file
-    CODEOWNERS_PATHS.find do |path|
-      File.exist?(path)
-    end || CODEOWNERS_PATHS.last
+        @entries = entries
+        @errors = errors
+      end
+    end
   end
 end
 
-class ValidOwners
-  def initialize(path)
-    @path = path
+module CheckCodeowners
+  module Repository
+    class CodeownersIgnore
+      Entry = Struct.new(:text, :filename, :line_number, keyword_init: true)
+
+      def initialize(path)
+        @path = path
+      end
+
+      attr_reader :path
+
+      def check_sorted
+        errors = []
+        previous_text = nil
+
+        entries.each do |entry|
+          if previous_text && entry.text <= previous_text
+            errors << {
+              message: "Line is duplicated or out of sequence at #{entry.filename}:#{entry.line_number}",
+              code: "ignore_file_not_in_sequence",
+              file: entry.filename,
+              line: entry.line_number,
+            }
+          end
+
+          previous_text = entry.text
+        end
+
+        errors
+      end
+
+      def patterns
+        patterns_and_files[0]
+      end
+
+      def files
+        patterns_and_files[1]
+      end
+
+      private
+
+      def entries
+        return @entries if defined? @entries
+
+        lines = begin
+                  IO.readlines(path).map(&:chomp)
+                rescue Errno::ENOENT
+                  []
+                end
+
+        entries = []
+
+        lines.each_with_index do |line, index|
+          next if line.empty? || line.start_with?("#")
+          entries << Entry.new(
+            text: line.chomp,
+            filename: path,
+            line_number: index + 1,
+          )
+        end
+
+        @entries = entries
+      end
+
+      def patterns_and_files
+        @patterns_and_files ||= entries.map(&:text).partition { |text| text.include?("*") }
+      end
+    end
   end
+end
 
-  def valid_owners
-    @valid_owners ||= parse
+module CheckCodeowners
+  module Repository
+    class Entry
+      def initialize(text:, file:, line_number:)
+        @text = text
+        @file = file
+        @line_number = line_number
+      end
+
+      attr_reader :text, :file, :line_number
+
+      def to_json(*args)
+        to_h.to_json(*args)
+      end
+
+      def to_h
+        { text: text, file: file, line_number: line_number }
+      end
+    end
   end
+end
 
-  private
+require 'shellwords'
+require 'tempfile'
 
-  attr_reader :path
+module CheckCodeowners
+  module Repository
+    class GitLs
+      def all_files
+        @all_files ||= git_ls_files(args: [])
+      end
 
-  def parse
-    begin
-      IO.readlines(path).map(&:chomp)
-    rescue Errno::ENOENT
-      nil
+      def matching_files(patterns)
+        Tempfile.open do |tmpfile|
+          patterns.each do |pattern|
+            tmpfile.puts pattern
+          end
+
+          tmpfile.flush
+
+          git_ls_files(args: ["--cached", "--ignored", "--exclude-from", tmpfile.path])
+        end
+      end
+
+      private
+
+      def git_ls_files(args:)
+        output = `git ls-files -z #{Shellwords.shelljoin(args)}`
+        $?.success? or raise "git ls-files #{args.inspect} failed"
+
+        output.split("\0")
+      end
+    end
+  end
+end
+
+module CheckCodeowners
+  module Repository
+    class OwnerEntry < Entry
+      def initialize(text:, file:, line_number:, pattern:, owners:, indent:)
+        super(text: text, file: file, line_number: line_number)
+        @pattern = pattern
+        @owners = owners
+        @indent = indent
+      end
+
+      attr_reader :pattern, :owners, :indent
+
+      def to_h
+        super.merge(pattern: pattern, owners: owners, indent: indent)
+      end
+    end
+  end
+end
+
+module CheckCodeowners
+  module Repository
+    class Repository
+      CODEOWNERS_PATHS = [
+        "CODEOWNERS",
+        "docs/CODEOWNERS",
+        ".github/CODEOWNERS",
+      ].freeze
+
+      # The repository directory is always the current directory.
+      # Maybe that could be changed one day.
+
+      def git_ls
+        @git_ls ||= GitLs.new
+      end
+
+      def individual_pattern_checker
+        @individual_pattern_checker ||= IndividualPatternChecker.new(codeowners.owner_entries)
+      end
+
+      def codeowners
+        @codeowners ||= Codeowners.new(codeowners_file)
+      end
+
+      def codeowners_ignore
+        @codeowners_ignore ||= CodeownersIgnore.new(codeowners_ignore_file)
+      end
+
+      def valid_owners
+        @valid_owners ||= ValidOwners.new(validowners_file)
+      end
+
+      private
+
+      def codeowners_file
+        @codeowners_file ||= find_codeowners_file
+      end
+
+      def codeowners_ignore_file
+        @codeowners_ignore_file ||= codeowners_file + ".ignore"
+      end
+
+      def validowners_file
+        @validowners_file ||= codeowners_file.sub(/CODEOWNERS$/, "VALIDOWNERS")
+      end
+
+      # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-file-location
+      def find_codeowners_file
+        CODEOWNERS_PATHS.find do |path|
+          File.exist?(path)
+        end || CODEOWNERS_PATHS.last
+      end
+    end
+  end
+end
+
+module CheckCodeowners
+  module Repository
+    class ValidOwners
+      def initialize(path)
+        @path = path
+      end
+
+      def valid_owners
+        @valid_owners ||= parse
+      end
+
+      private
+
+      attr_reader :path
+
+      def parse
+        begin
+          IO.readlines(path).map(&:chomp)
+        rescue Errno::ENOENT
+          nil
+        end
+      end
     end
   end
 end
 
 
-options = GetOptions.new(ARGV)
 
-repo = Repository.new
+
+options = CheckCodeowners::GetOptions.new(ARGV)
+
+repo = CheckCodeowners::Repository::Repository.new
 
 if options.who_owns
-  Reports.new(repo, options).who_owns
+  CheckCodeowners::Reports.new(repo, options).who_owns
   exit
 end
 
 if options.files_owned
-  Reports.new(repo, options).files_owned
+  CheckCodeowners::Reports.new(repo, options).files_owned
   exit
 end
 
-checker = CheckRunner.new(repo, options)
+checker = CheckCodeowners::CheckRunner.new(repo, options)
 checker.show_checks
 exit 1 if checker.errors?
 exit 0
