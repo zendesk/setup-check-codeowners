@@ -8,6 +8,10 @@ class Repository
   # The repository directory is always the current directory.
   # Maybe that could be changed one day.
 
+  def git_ls
+    @git_ls ||= GitLs.new
+  end
+
   def codeowners
     @codeowners ||= Codeowners.new(codeowners_file)
   end

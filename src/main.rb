@@ -10,6 +10,7 @@ require_relative 'lib/check_codeowners/codeowners'
 require_relative 'lib/check_codeowners/codeowners_ignore'
 require_relative 'lib/check_codeowners/owner_entry'
 require_relative 'lib/check_codeowners/get_options'
+require_relative 'lib/check_codeowners/git_ls'
 require_relative 'lib/check_codeowners/repository'
 require_relative 'lib/check_codeowners/valid_owners'
 
@@ -71,35 +72,6 @@ def check_valid_owners(repo, owner_entries)
   end
 
   Struct.new(:errors).new(errors)
-end
-
-def git_ls_files(args:)
-  output = `git ls-files -z #{Shellwords.shelljoin(args)}`
-  $?.success? or raise "git ls-files #{args.inspect} failed"
-
-  output.split("\0")
-end
-
-def get_all_files
-  git_ls_files(args: [])
-end
-
-def find_unowned_files(owner_entries, all_files)
-  unowned_files = Set.new(all_files)
-
-  Tempfile.open do |tmpfile|
-    owner_entries.each do |entry|
-      tmpfile.puts entry.pattern
-    end
-
-    tmpfile.flush
-
-    owned_files = git_ls_files(args: ["--cached", "--ignored", "--exclude-from", tmpfile.path])
-    unowned_files -= owned_files
-  end
-
-  # Report on any file which is not matched by any entry (unowned)
-  unowned_files.sort
 end
 
 def check_individual_patterns(owner_entries)
@@ -167,7 +139,7 @@ def report_who_owns(owner_entries, show_json, files)
   report_file_ownership(results, show_json, :who_owns)
 end
 
-def report_files_owned(owner_entries, show_json, args)
+def report_files_owned(repo, owner_entries, show_json, args)
   # We don't *have* to brute force every pattern - we could instead
   # run git ls-files per owner, not per pattern. But we already have
   # the code, so it's convenient.
@@ -178,7 +150,7 @@ def report_files_owned(owner_entries, show_json, args)
     {}
   end
 
-  results = get_all_files.map do |file|
+  results = repo.git_ls.all_files.map do |file|
     matches = match_map[file]
     next unless matches
 
@@ -262,10 +234,12 @@ def run_all_checks(repo, codeowners, owner_entries, options)
     errors.concat(r.errors)
   end
 
-  all_files = get_all_files
+  all_files = repo.git_ls.all_files
 
   if options.check_unowned
-    unowned = find_unowned_files(owner_entries, all_files)
+    all_files = repo.git_ls.all_files.to_set
+    owned_files = repo.git_ls.matching_files(owner_entries.map(&:pattern)).to_set
+    unowned = (all_files - owned_files).sort
     r = check_unowned_files(repo, unowned, options)
     warnings.concat(r.warnings)
     errors.concat(r.errors)
@@ -317,13 +291,13 @@ repo = Repository.new
 owner_entries = repo.codeowners.owner_entries
 
 if options.who_owns
-  files = (options.args.empty? ? get_all_files : options.args)
+  files = (options.args.empty? ? repo.git_ls.all_files : options.args)
   report_who_owns(owner_entries, options.show_json, files)
   exit
 end
 
 if options.files_owned
-  report_files_owned(owner_entries, options.show_json, options.args)
+  report_files_owned(repo, owner_entries, options.show_json, options.args)
   exit
 end
 
