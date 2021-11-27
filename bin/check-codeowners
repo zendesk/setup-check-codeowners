@@ -3,14 +3,12 @@
 # This is a generated file; for the source, see 'src'.
 # Build with "ruby ./script/build.rb"
 
-#line 1 "src/main.rb"
 #!/usr/bin/env ruby
 
 require 'set'
 require 'shellwords'
 require 'tempfile'
 
-#line 1 "src/lib/check_codeowners/multi_git_ls_runner.rb"
 require 'etc'
 require 'shellwords'
 require 'tempfile'
@@ -84,8 +82,6 @@ class MultiGitLsRunner
   end
 end
 
-#line 8 "src/main.rb"
-#line 1 "src/lib/check_codeowners/entry.rb"
 class Entry
   def initialize(text:, file:, line_number:)
     @text = text
@@ -104,8 +100,6 @@ class Entry
   end
 end
 
-#line 9 "src/main.rb"
-#line 1 "src/lib/check_codeowners/ignore_file.rb"
 class IgnoreFile
   Entry = Struct.new(:text, :filename, :line_number, keyword_init: true)
 
@@ -173,8 +167,6 @@ class IgnoreFile
   end
 end
 
-#line 10 "src/main.rb"
-#line 1 "src/lib/check_codeowners/owner_entry.rb"
 class OwnerEntry < Entry
   def initialize(text:, file:, line_number:, pattern:, owners:, indent:)
     super(text: text, file: file, line_number: line_number)
@@ -190,8 +182,6 @@ class OwnerEntry < Entry
   end
 end
 
-#line 11 "src/main.rb"
-#line 1 "src/lib/check_codeowners/get_options.rb"
 require 'optparse'
 
 class GetOptions
@@ -289,8 +279,6 @@ class GetOptions
   end
 end
 
-#line 12 "src/main.rb"
-#line 1 "src/lib/check_codeowners/parsers.rb"
 class Parsers
   def parse_codeowners_file(path)
     lines = begin
@@ -336,8 +324,6 @@ class Parsers
   end
 end
 
-#line 13 "src/main.rb"
-#line 1 "src/lib/check_codeowners/repository.rb"
 class Repository
   CODEOWNERS_PATHS = [
     "CODEOWNERS",
@@ -382,7 +368,6 @@ class Repository
   end
 end
 
-#line 14 "src/main.rb"
 
 def check_sorted(owner_entries)
   errors = []
