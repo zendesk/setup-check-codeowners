@@ -6,11 +6,12 @@ require 'tempfile'
 
 require_relative 'lib/check_codeowners/multi_git_ls_runner'
 require_relative 'lib/check_codeowners/entry'
-require_relative 'lib/check_codeowners/ignore_file'
+require_relative 'lib/check_codeowners/codeowners_ignore'
 require_relative 'lib/check_codeowners/owner_entry'
 require_relative 'lib/check_codeowners/get_options'
 require_relative 'lib/check_codeowners/parsers'
 require_relative 'lib/check_codeowners/repository'
+require_relative 'lib/check_codeowners/valid_owners'
 
 def check_sorted(owner_entries)
   errors = []
@@ -50,7 +51,7 @@ def check_valid_owners(repo, owner_entries)
   # This is just to catch typos.
   # We could look up against github, of course.
   # For now, hard-wired is better than nothing.
-  valid_owners = repo.validowners_entries
+  valid_owners = repo.valid_owners.valid_owners
 
   errors = []
 
@@ -194,7 +195,7 @@ end
 # Errors if there are files that don't have an owner (except if the file is included in ignore)
 def check_unowned_files(repo, unowned_files, options)
   unowned_files = Set.new(unowned_files)
-  ignore_file = repo.ignore_file
+  ignore_file = repo.codeowners_ignore
 
   warnings = []
   errors = []

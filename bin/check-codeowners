@@ -100,7 +100,7 @@ class Entry
   end
 end
 
-class IgnoreFile
+class CodeownersIgnore
   Entry = Struct.new(:text, :filename, :line_number, keyword_init: true)
 
   def initialize(path)
@@ -314,14 +314,6 @@ class Parsers
 
     Struct.new(:entries, :errors).new(entries, errors)
   end
-
-  def parse_validowners(path)
-    begin
-      IO.readlines(path).map(&:chomp)
-    rescue Errno::ENOENT
-      nil
-    end
-  end
 end
 
 class Repository
@@ -342,29 +334,51 @@ class Repository
     @codeowners_ignore_file ||= codeowners_file + ".ignore"
   end
 
-  def validowners_file
-    @validowners_file ||= codeowners_file.sub(/CODEOWNERS$/, "VALIDOWNERS")
-  end
-
   def codeowners_entries
     @codeowners_entries ||= Parsers.new.parse_codeowners_file(codeowners_file)
   end
 
-  def ignore_file
-    @ignore_file ||= IgnoreFile.new(codeowners_ignore_file)
+  def codeowners_ignore
+    @codeowners_ignore ||= CodeownersIgnore.new(codeowners_ignore_file)
   end
 
-  def validowners_entries
-    @validowners_entries ||= Parsers.new.parse_validowners(validowners_file)
+  def valid_owners
+    @valid_owners ||= ValidOwners.new(validowners_file)
   end
 
   private
+
+  def validowners_file
+    @validowners_file ||= codeowners_file.sub(/CODEOWNERS$/, "VALIDOWNERS")
+  end
 
   # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-file-location
   def find_codeowners_file
     CODEOWNERS_PATHS.find do |path|
       File.exist?(path)
     end || CODEOWNERS_PATHS.last
+  end
+end
+
+class ValidOwners
+  def initialize(path)
+    @path = path
+  end
+
+  def valid_owners
+    @valid_owners ||= parse
+  end
+
+  private
+
+  attr_reader :path
+
+  def parse
+    begin
+      IO.readlines(path).map(&:chomp)
+    rescue Errno::ENOENT
+      nil
+    end
   end
 end
 
@@ -407,7 +421,7 @@ def check_valid_owners(repo, owner_entries)
   # This is just to catch typos.
   # We could look up against github, of course.
   # For now, hard-wired is better than nothing.
-  valid_owners = repo.validowners_entries
+  valid_owners = repo.valid_owners.valid_owners
 
   errors = []
 
@@ -551,7 +565,7 @@ end
 # Errors if there are files that don't have an owner (except if the file is included in ignore)
 def check_unowned_files(repo, unowned_files, options)
   unowned_files = Set.new(unowned_files)
-  ignore_file = repo.ignore_file
+  ignore_file = repo.codeowners_ignore
 
   warnings = []
   errors = []

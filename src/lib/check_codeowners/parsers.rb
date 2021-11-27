@@ -33,12 +33,4 @@ class Parsers
 
     Struct.new(:entries, :errors).new(entries, errors)
   end
-
-  def parse_validowners(path)
-    begin
-      IO.readlines(path).map(&:chomp)
-    rescue Errno::ENOENT
-      nil
-    end
-  end
 end
