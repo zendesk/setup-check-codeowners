@@ -107,6 +107,8 @@ class CodeownersIgnore
     @path = path
   end
 
+  attr_reader :path
+
   def check_sorted
     errors = []
     previous_text = nil
@@ -136,8 +138,6 @@ class CodeownersIgnore
   end
 
   private
-
-  attr_reader :path
 
   def entries
     return @entries if defined? @entries
@@ -330,10 +330,6 @@ class Repository
     @codeowners_file ||= find_codeowners_file
   end
 
-  def codeowners_ignore_file
-    @codeowners_ignore_file ||= codeowners_file + ".ignore"
-  end
-
   def codeowners_entries
     @codeowners_entries ||= Parsers.new.parse_codeowners_file(codeowners_file)
   end
@@ -347,6 +343,10 @@ class Repository
   end
 
   private
+
+  def codeowners_ignore_file
+    @codeowners_ignore_file ||= codeowners_file + ".ignore"
+  end
 
   def validowners_file
     @validowners_file ||= codeowners_file.sub(/CODEOWNERS$/, "VALIDOWNERS")
@@ -603,7 +603,7 @@ def check_unowned_files(repo, unowned_files, options)
   unused_ignores.sort.each do |unused_ignore|
     warnings << {
       code: "unused_ignore",
-      message: "The following entry in #{repo.codeowners_ignore_file} doesn't match any unowned files and should be removed: #{unused_ignore}", # Obsolete entry
+      message: "The following entry in #{ignore_file.path} doesn't match any unowned files and should be removed: #{unused_ignore}", # Obsolete entry
       unused_ignore: unused_ignore,
     }
   end

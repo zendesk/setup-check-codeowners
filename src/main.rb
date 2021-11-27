@@ -233,7 +233,7 @@ def check_unowned_files(repo, unowned_files, options)
   unused_ignores.sort.each do |unused_ignore|
     warnings << {
       code: "unused_ignore",
-      message: "The following entry in #{repo.codeowners_ignore_file} doesn't match any unowned files and should be removed: #{unused_ignore}", # Obsolete entry
+      message: "The following entry in #{ignore_file.path} doesn't match any unowned files and should be removed: #{unused_ignore}", # Obsolete entry
       unused_ignore: unused_ignore,
     }
   end

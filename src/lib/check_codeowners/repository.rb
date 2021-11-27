@@ -12,10 +12,6 @@ class Repository
     @codeowners_file ||= find_codeowners_file
   end
 
-  def codeowners_ignore_file
-    @codeowners_ignore_file ||= codeowners_file + ".ignore"
-  end
-
   def codeowners_entries
     @codeowners_entries ||= Parsers.new.parse_codeowners_file(codeowners_file)
   end
@@ -29,6 +25,10 @@ class Repository
   end
 
   private
+
+  def codeowners_ignore_file
+    @codeowners_ignore_file ||= codeowners_file + ".ignore"
+  end
 
   def validowners_file
     @validowners_file ||= codeowners_file.sub(/CODEOWNERS$/, "VALIDOWNERS")

@@ -5,6 +5,8 @@ class CodeownersIgnore
     @path = path
   end
 
+  attr_reader :path
+
   def check_sorted
     errors = []
     previous_text = nil
@@ -34,8 +36,6 @@ class CodeownersIgnore
   end
 
   private
-
-  attr_reader :path
 
   def entries
     return @entries if defined? @entries
