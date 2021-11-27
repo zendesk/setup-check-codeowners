@@ -9,94 +9,63 @@ require 'set'
 require 'shellwords'
 require 'tempfile'
 
-require 'etc'
-require 'shellwords'
-require 'tempfile'
-require 'tmpdir'
-
-class MultiGitLsRunner
-  PREFIX_LENGTH = 6
-
-  def initialize(patterns)
-    # Each arg to the script will be "<output_file>:<pattern>"
-    @inputs = patterns.sort.uniq.each_with_index.map do |pattern, index|
-      [ pattern, "%0#{PREFIX_LENGTH}d" % index ]
-    end
+class CheckRunner
+  def initialize(repo, options)
+    @repo = repo
+    @options = options
   end
 
-  def run
-    with_output_dir do
-      with_splitter_script do
-        run_xargs
-        outputs_by_pattern
-      end
+  def show_checks
+    r = Checks.new(repo, options).results
+
+    if options.strict
+      r.errors.concat(r.warnings)
+      r.warnings = []
     end
+
+    if options.show_json
+      show_checks_json(r)
+    else
+      show_checks_text(r)
+    end
+
+    @has_errors = r.errors.any?
+  end
+
+  def errors?
+    @has_errors
   end
 
   private
 
-  attr_reader :inputs
+  attr_reader :repo, :options
 
-  def with_output_dir
-    Dir.mktmpdir do |tmpdir|
-      @output_dir = tmpdir
-      yield
+  def show_checks_json(r)
+    output = {
+      errors: r.errors,
+      warnings: r.warnings
+    }
+
+    if options.debug
+      output.merge!(
+        entries: report.codeowners.entries,
+        owner_entries: report.codeowners.owner_entries,
+        all_files: r.all_files,
+        match_map: r.match_map,
+      )
     end
+
+    require 'json'
+    puts JSON.pretty_generate(output)
   end
 
-  def with_splitter_script
-    Tempfile.open do |script|
-      script.puts <<~SCRIPT
-        #!/bin/bash
-        umask 077
-        exec git ls-files -z --cached --ignored --exclude "${1:#{PREFIX_LENGTH + 1}}" \
-          > #{Shellwords.escape(@output_dir)}/${1:0:#{PREFIX_LENGTH}}
-      SCRIPT
-      script.chmod 0o700
-      script.close
+  def show_checks_text(r)
+    r.errors.each { |item| puts "ERROR: #{item[:message]}" }
+    r.warnings.each { |item| puts "WARNING: #{item[:message]}" }
 
-      @splitter = script.path
-      yield
+    if r.errors.any? || r.warnings.any?
+      puts "For help, see https://github.com/zendesk/setup-check-codeowners/blob/main/Usage.md"
     end
-  end
-
-  def run_xargs
-    Tempfile.open do |input_file|
-      inputs.each do |pattern, output_file|
-        input_file.puts "#{output_file}:#{pattern}"
-      end
-      input_file.flush
-
-      system "xargs", "-n", "1", "-P", Etc.nprocessors.to_s, @splitter,
-             in: input_file.path
-      $?.success? or raise "xargs / git ls-files failed"
-    end
-  end
-
-  def outputs_by_pattern
-    inputs.map do |pattern, output_file|
-      file = File.join(@output_dir, output_file)
-      results = File.read(file).split("\0")
-      [pattern, results]
-    end.to_h
-  end
-end
-
-class Entry
-  def initialize(text:, file:, line_number:)
-    @text = text
-    @file = file
-    @line_number = line_number
-  end
-
-  attr_reader :text, :file, :line_number
-
-  def to_json(*args)
-    to_h.to_json(*args)
-  end
-
-  def to_h
-    { text: text, file: file, line_number: line_number }
   end
 end
 
@@ -266,66 +235,6 @@ class Checks
   end
 end
 
-class CheckRunner
-  def initialize(repo, options)
-    @repo = repo
-    @options = options
-  end
-
-  def show_checks
-    r = Checks.new(repo, options).results
-
-    if options.strict
-      r.errors.concat(r.warnings)
-      r.warnings = []
-    end
-
-    if options.show_json
-      show_checks_json(r)
-    else
-      show_checks_text(r)
-    end
-
-    @has_errors = r.errors.any?
-  end
-
-  def errors?
-    @has_errors
-  end
-
-  private
-
-  attr_reader :repo, :options
-
-  def show_checks_json(r)
-    output = {
-      errors: r.errors,
-      warnings: r.warnings
-    }
-
-    if options.debug
-      output.merge!(
-        entries: report.codeowners.entries,
-        owner_entries: report.codeowners.owner_entries,
-        all_files: r.all_files,
-        match_map: r.match_map,
-      )
-    end
-
-    require 'json'
-    puts JSON.pretty_generate(output)
-  end
-
-  def show_checks_text(r)
-    r.errors.each { |item| puts "ERROR: #{item[:message]}" }
-    r.warnings.each { |item| puts "WARNING: #{item[:message]}" }
-
-    if r.errors.any? || r.warnings.any?
-      puts "For help, see https://github.com/zendesk/setup-check-codeowners/blob/main/Usage.md"
-    end
-  end
-end
-
 class Codeowners
   def initialize(path)
     @path = path
@@ -444,74 +353,21 @@ class CodeownersIgnore
   end
 end
 
-class IndividualPatternChecker
-  def initialize(owner_entries)
-    @owner_entries = owner_entries
+class Entry
+  def initialize(text:, file:, line_number:)
+    @text = text
+    @file = file
+    @line_number = line_number
   end
 
-  def match_map
-    results.match_map
+  attr_reader :text, :file, :line_number
+
+  def to_json(*args)
+    to_h.to_json(*args)
   end
-
-  def warnings
-    results.warnings
-  end
-
-  private
-
-  attr_reader :owner_entries
-
-  def results
-    @results ||= check_individual_patterns
-  end
-
-  def check_individual_patterns
-    # Slow but thorough: use git to check which files each individual pattern matches
-    # May not scale well!
-
-    match_map = {}
-    warnings = []
-
-    matched_files_collection = MultiGitLsRunner.new(owner_entries.map(&:pattern)).run
-
-    owner_entries.each do |entry|
-      matched_files = matched_files_collection[entry.pattern]
-
-      # Report on any pattern which doesn't match any files (cruft)
-      if matched_files.empty?
-        warnings << {
-          code: "unmatched_pattern",
-          message: "Pattern #{entry.pattern} at #{entry.file}:#{entry.line_number} doesn't match any files",
-          entry: entry,
-        }
-      end
-
-      matched_files.each do |file|
-        (match_map[file] ||= []) << entry
-      end
-    end
-
-    # Should we report on any file matched by more than one entry?
-    # It could indicate an unintended conflict. But what if the
-    # "conflict" is absolutely intended? Maybe it's not worth checking.
-    # Maybe "too many" owners is better than too few.
-
-    Struct.new(:match_map, :warnings).new(match_map, warnings)
-  end
-end
-
-class OwnerEntry < Entry
-  def initialize(text:, file:, line_number:, pattern:, owners:, indent:)
-    super(text: text, file: file, line_number: line_number)
-    @pattern = pattern
-    @owners = owners
-    @indent = indent
-  end
-
-  attr_reader :pattern, :owners, :indent
 
   def to_h
-    super.merge(pattern: pattern, owners: owners, indent: indent)
+    { text: text, file: file, line_number: line_number }
   end
 end
 
@@ -639,6 +495,150 @@ class GitLs
     $?.success? or raise "git ls-files #{args.inspect} failed"
 
     output.split("\0")
+  end
+end
+
+class IndividualPatternChecker
+  def initialize(owner_entries)
+    @owner_entries = owner_entries
+  end
+
+  def match_map
+    results.match_map
+  end
+
+  def warnings
+    results.warnings
+  end
+
+  private
+
+  attr_reader :owner_entries
+
+  def results
+    @results ||= check_individual_patterns
+  end
+
+  def check_individual_patterns
+    # Slow but thorough: use git to check which files each individual pattern matches
+    # May not scale well!
+
+    match_map = {}
+    warnings = []
+
+    matched_files_collection = MultiGitLsRunner.new(owner_entries.map(&:pattern)).run
+
+    owner_entries.each do |entry|
+      matched_files = matched_files_collection[entry.pattern]
+
+      # Report on any pattern which doesn't match any files (cruft)
+      if matched_files.empty?
+        warnings << {
+          code: "unmatched_pattern",
+          message: "Pattern #{entry.pattern} at #{entry.file}:#{entry.line_number} doesn't match any files",
+          entry: entry,
+        }
+      end
+
+      matched_files.each do |file|
+        (match_map[file] ||= []) << entry
+      end
+    end
+
+    # Should we report on any file matched by more than one entry?
+    # It could indicate an unintended conflict. But what if the
+    # "conflict" is absolutely intended? Maybe it's not worth checking.
+    # Maybe "too many" owners is better than too few.
+
+    Struct.new(:match_map, :warnings).new(match_map, warnings)
+  end
+end
+
+require 'etc'
+require 'shellwords'
+require 'tempfile'
+require 'tmpdir'
+
+class MultiGitLsRunner
+  PREFIX_LENGTH = 6
+
+  def initialize(patterns)
+    # Each arg to the script will be "<output_file>:<pattern>"
+    @inputs = patterns.sort.uniq.each_with_index.map do |pattern, index|
+      [ pattern, "%0#{PREFIX_LENGTH}d" % index ]
+    end
+  end
+
+  def run
+    with_output_dir do
+      with_splitter_script do
+        run_xargs
+        outputs_by_pattern
+      end
+    end
+  end
+
+  private
+
+  attr_reader :inputs
+
+  def with_output_dir
+    Dir.mktmpdir do |tmpdir|
+      @output_dir = tmpdir
+      yield
+    end
+  end
+
+  def with_splitter_script
+    Tempfile.open do |script|
+      script.puts <<~SCRIPT
+        #!/bin/bash
+        umask 077
+        exec git ls-files -z --cached --ignored --exclude "${1:#{PREFIX_LENGTH + 1}}" \
+          > #{Shellwords.escape(@output_dir)}/${1:0:#{PREFIX_LENGTH}}
+      SCRIPT
+      script.chmod 0o700
+      script.close
+
+      @splitter = script.path
+      yield
+    end
+  end
+
+  def run_xargs
+    Tempfile.open do |input_file|
+      inputs.each do |pattern, output_file|
+        input_file.puts "#{output_file}:#{pattern}"
+      end
+      input_file.flush
+
+      system "xargs", "-n", "1", "-P", Etc.nprocessors.to_s, @splitter,
+             in: input_file.path
+      $?.success? or raise "xargs / git ls-files failed"
+    end
+  end
+
+  def outputs_by_pattern
+    inputs.map do |pattern, output_file|
+      file = File.join(@output_dir, output_file)
+      results = File.read(file).split("\0")
+      [pattern, results]
+    end.to_h
+  end
+end
+
+class OwnerEntry < Entry
+  def initialize(text:, file:, line_number:, pattern:, owners:, indent:)
+    super(text: text, file: file, line_number: line_number)
+    @pattern = pattern
+    @owners = owners
+    @indent = indent
+  end
+
+  attr_reader :pattern, :owners, :indent
+
+  def to_h
+    super.merge(pattern: pattern, owners: owners, indent: indent)
   end
 end
 
