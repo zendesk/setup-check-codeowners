@@ -8,9 +8,11 @@ require_relative 'lib/check_codeowners/multi_git_ls_runner'
 require_relative 'lib/check_codeowners/entry'
 require_relative 'lib/check_codeowners/codeowners'
 require_relative 'lib/check_codeowners/codeowners_ignore'
+require_relative 'lib/check_codeowners/individual_pattern_checker'
 require_relative 'lib/check_codeowners/owner_entry'
 require_relative 'lib/check_codeowners/get_options'
 require_relative 'lib/check_codeowners/git_ls'
+require_relative 'lib/check_codeowners/reports'
 require_relative 'lib/check_codeowners/repository'
 require_relative 'lib/check_codeowners/valid_owners'
 
@@ -72,95 +74,6 @@ def check_valid_owners(repo, owner_entries)
   end
 
   Struct.new(:errors).new(errors)
-end
-
-def check_individual_patterns(owner_entries)
-  # Slow but thorough: use git to check which files each individual pattern matches
-  # May not scale well!
-
-  match_map = {}
-  warnings = []
-
-  matched_files_collection = MultiGitLsRunner.new(owner_entries.map { |e| e.pattern }).run
-
-  owner_entries.each do |entry|
-    matched_files = matched_files_collection[entry.pattern]
-
-    # Report on any pattern which doesn't match any files (cruft)
-    if matched_files.empty?
-      warnings << {
-        code: "unmatched_pattern",
-        message: "Pattern #{entry.pattern} at #{entry.file}:#{entry.line_number} doesn't match any files",
-        entry: entry,
-      }
-    end
-
-    matched_files.each do |file|
-      (match_map[file] ||= []) << entry
-    end
-  end
-
-  # Should we report on any file matched by more than one entry?
-  # It could indicate an unintended conflict. But what if the
-  # "conflict" is absolutely intended? Maybe it's not worth checking.
-  # Maybe "too many" owners is better than too few.
-
-  Struct.new(:match_map, :warnings).new(match_map, warnings)
-end
-
-def report_file_ownership(results, show_json, json_root_key)
-  if show_json
-    require 'json'
-    puts JSON.pretty_generate(json_root_key => results)
-  else
-    results.each do |result|
-      if result[:owners].any?
-        puts "#{result[:file]}\t#{result[:owners].join(' ')}"
-      else
-        puts "#{result[:file]}\t-"
-      end
-    end
-  end
-end
-
-def report_who_owns(owner_entries, show_json, files)
-  # Discards warnings
-  match_map = check_individual_patterns(owner_entries).match_map
-
-  results = files.map do |file|
-    file = file.sub(/^\.\/+/, '')
-    matches = match_map[file]
-    owners = if matches
-      matches.map(&:owners).flatten.sort.uniq
-    end
-    { file: file, owners: owners || [] }
-  end
-
-  report_file_ownership(results, show_json, :who_owns)
-end
-
-def report_files_owned(repo, owner_entries, show_json, args)
-  # We don't *have* to brute force every pattern - we could instead
-  # run git ls-files per owner, not per pattern. But we already have
-  # the code, so it's convenient.
-  match_map = if args.any?
-    # Discards warnings
-    check_individual_patterns(owner_entries).match_map
-  else
-    {}
-  end
-
-  results = repo.git_ls.all_files.map do |file|
-    matches = match_map[file]
-    next unless matches
-
-    owners = matches.map(&:owners).flatten.sort.uniq & args
-    next unless owners.any?
-
-    { file: file, owners: owners }
-  end.compact
-
-  report_file_ownership(results, show_json, :files_owned)
 end
 
 # Warns if there are entries in the ignore file that are now owned
@@ -246,9 +159,8 @@ def run_all_checks(repo, codeowners, owner_entries, options)
   end
 
   match_map = if options.find_redundant_ignores
-                r = check_individual_patterns(owner_entries)
-                warnings.concat(r.warnings)
-                r.match_map
+                warnings.concat(repo.individual_pattern_checker.warnings)
+                repo.individual_pattern_checker.match_map
               end
 
   Struct.new(:errors, :warnings, :all_files, :match_map).new(errors, warnings, all_files, match_map)
@@ -291,13 +203,12 @@ repo = Repository.new
 owner_entries = repo.codeowners.owner_entries
 
 if options.who_owns
-  files = (options.args.empty? ? repo.git_ls.all_files : options.args)
-  report_who_owns(owner_entries, options.show_json, files)
+  Reports.new(repo, options).who_owns
   exit
 end
 
 if options.files_owned
-  report_files_owned(repo, owner_entries, options.show_json, options.args)
+  Reports.new(repo, options).files_owned
   exit
 end
 

@@ -12,6 +12,10 @@ class Repository
     @git_ls ||= GitLs.new
   end
 
+  def individual_pattern_checker
+    @individual_pattern_checker ||= IndividualPatternChecker.new(codeowners.owner_entries)
+  end
+
   def codeowners
     @codeowners ||= Codeowners.new(codeowners_file)
   end
