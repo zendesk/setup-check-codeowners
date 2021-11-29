@@ -5,7 +5,7 @@ require 'tempfile'
 def build(input, out)
   File.readlines(input).each do |line|
     if relative_path = line[/^require_relative\s+(["'])(\S+)\1$/, 2]
-      path = File.expand_path(relative_path, File.dirname(input))
+      path = File.join(File.dirname(input), relative_path)
       path += ".rb"
       build(path, out)
       out.puts
