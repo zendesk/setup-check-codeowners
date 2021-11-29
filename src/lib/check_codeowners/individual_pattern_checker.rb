@@ -42,7 +42,7 @@ module CheckCodeowners
         end
 
         matched_files.each do |file|
-          (match_map[file] ||= []) << entry
+          match_map[file] = entry
         end
       end
 
