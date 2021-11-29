@@ -15,9 +15,9 @@ module CheckCodeowners
 
       results = files.map do |file|
         file = file.sub(/^\.\/+/, '')
-        matches = match_map[file]
-        owners = if matches
-                   matches.map(&:owners).flatten.sort.uniq
+        match = match_map[file]
+        owners = if match
+                   match.owners.sort.uniq
                  end
         { file: file, owners: owners || [] }
       end
@@ -31,10 +31,10 @@ module CheckCodeowners
         # run git ls-files per owner, not per pattern. But we already have
         # the code, so it's convenient.
         # Discards warnings
-        matches = repo.individual_pattern_checker.match_map[file]
-        next unless matches
+        match = repo.individual_pattern_checker.match_map[file]
+        next unless match
 
-        owners = matches.map(&:owners).flatten.sort.uniq & options.args
+        owners = match.owners.sort.uniq & options.args
         next unless owners.any?
 
         { file: file, owners: owners }
