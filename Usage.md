@@ -26,7 +26,7 @@ See [Errors and warnings](#errors-and-warnings) for a description of the checks 
 
 ## Errors and warnings
 
-### Line is duplicated or out of sequence
+### Lines are not sorted
 
 By default, lines in both `CODEOWNERS` and `CODEOWNERS.ignore` must be in alphabetical order. This error
 indicates that the lines are not in order. Comments and blank lines are excluded from this check.

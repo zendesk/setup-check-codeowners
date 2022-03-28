@@ -16,7 +16,7 @@ module CheckCodeowners
         entries.each do |entry|
           if previous_text && entry.text <= previous_text
             errors << {
-              message: "Line is duplicated or out of sequence at #{entry.filename}:#{entry.line_number}",
+              message: "Lines are not sorted at #{entry.filename}:#{entry.line_number}",
               code: "ignore_file_not_in_sequence",
               file: entry.filename,
               line: entry.line_number,
