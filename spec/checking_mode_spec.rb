@@ -290,7 +290,7 @@ RSpec.describe "check-codeowners checking mode" do
 
       aggregate_failures do
         expect(r.status.exitstatus).to eq(1)
-        expect(r.stdout).to eq("ERROR: Line is duplicated or out of sequence at .github/CODEOWNERS:3\n" + help_message)
+        expect(r.stdout).to eq("ERROR: Lines are not sorted at .github/CODEOWNERS:3\n" + help_message)
         expect(r.stderr).to eq("")
       end
     end
@@ -331,7 +331,7 @@ RSpec.describe "check-codeowners checking mode" do
 
       aggregate_failures do
         expect(r.status.exitstatus).to eq(1)
-        expect(r.stdout).to eq("ERROR: Line is duplicated or out of sequence at .github/CODEOWNERS.ignore:4\n" + help_message)
+        expect(r.stdout).to eq("ERROR: Lines are not sorted at .github/CODEOWNERS.ignore:4\n" + help_message)
         expect(r.stderr).to eq("")
       end
     end

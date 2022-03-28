@@ -22,7 +22,7 @@ module CheckCodeowners
         if index > 0 && entry.pattern <= owner_entries[index - 1].pattern
           errors << {
             code: "codeowners_file_not_in_sequence",
-            message: "Line is duplicated or out of sequence at #{entry.file}:#{entry.line_number}",
+            message: "Lines are not sorted at #{entry.file}:#{entry.line_number}",
             entry: entry
           }
         end
