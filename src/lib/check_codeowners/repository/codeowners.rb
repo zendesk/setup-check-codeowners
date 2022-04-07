@@ -31,12 +31,12 @@ module CheckCodeowners
           case line
           when "", /^#/
             # Could be used in the future to reconstruct the file
-            Entry.new(base)
+            Entry.new(**base)
           when /^((\S+)\s+)(#{owner_re}( #{owner_re})*)$/
             base.merge!(pattern: $2, indent: ($1).length, owners: $3.split(' '))
-            OwnerEntry.new(base)
+            OwnerEntry.new(**base)
           else
-            Entry.new(base).tap do |entry|
+            Entry.new(**base).tap do |entry|
               errors << {
                 code: "unrecognised_line",
                 message: "Unrecognised line at #{entry.file}:#{entry.line_number}",
