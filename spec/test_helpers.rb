@@ -1,5 +1,6 @@
 require 'fileutils'
 require 'open3'
+require 'set'
 require 'tmpdir'
 
 module TestHelpers
