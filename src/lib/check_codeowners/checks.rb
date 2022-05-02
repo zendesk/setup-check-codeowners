@@ -115,7 +115,7 @@ module CheckCodeowners
       non_ignored_files.sort.each do |file|
         errors << {
           code: "non_ignored_files",
-          message: "Please add this file to #{repo.codeowners.path}: #{file}", # This file does not have an owner
+          message: "Please add this file to #{repo.codeowners.path}: /#{file}", # This file does not have an owner
           unowned: file,
         }
       end
