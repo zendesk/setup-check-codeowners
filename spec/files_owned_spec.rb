@@ -59,7 +59,7 @@ RSpec.describe "check-codeowners --files-owned" do
     create_file "foo/file1"
     add_codeowners "/* @foo/bar"
 
-    r = run "--files-owned"
+    r = run "--files-owned", "@foo/bar"
     aggregate_failures do
       expect(r.status).to be_success
       expect(r.stdout.lines.map(&:chomp)).to contain_exactly("file1\t@foo/bar")
