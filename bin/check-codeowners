@@ -441,19 +441,9 @@ module CheckCodeowners
     end
 
     def with_splitter_script
-      Tempfile.open do |script|
-        script.puts <<~SCRIPT
-          #!/bin/bash
-          umask 077
-          exec git ls-files -z --cached --ignored --exclude "${1:#{PREFIX_LENGTH + 1}}" \
-            > #{Shellwords.escape(@output_dir)}/${1:0:#{PREFIX_LENGTH}}
-        SCRIPT
-        script.chmod 0o700
-        script.close
-
-        @splitter = script.path
-        yield
-      end
+      ENV['OUTPUT_DIR'] = @output_dir
+      @splitter = File.expand_path("check-codeowners-splitter", File.dirname(__FILE__))
+      yield
     end
 
     def run_xargs

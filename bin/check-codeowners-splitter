@@ -1,0 +1,43 @@
+#!/usr/bin/env ruby
+
+require 'tempfile'
+require "English"
+
+$INPUT_RECORD_SEPARATOR = "\0"
+$OUTPUT_RECORD_SEPARATOR = "\0"
+
+output_file, pattern = ARGV.first.split(":", 2)
+output_file = File.join(ENV.fetch('OUTPUT_DIR'), output_file)
+
+# There's a special case for "/*" which
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# neglects to mention: "/*" (or e.g. "/foo/*" etc) has a different behaviour in gitignore
+# than it does in CODEOWNERS. Given "/file" and "/dir/foo",
+#
+#  - in gitignore, "/*" matches both "/file" and "/dir", and therefore "/dir/foo" is ignored too
+#  - in CODEOWNERS, "/*" matches "/file", but not "/dir", and therefore "/dir/foo" is NOT matched
+#
+# This special case only seems to apply if the pattern ends in "/*", and not for example
+# "/f*" or "/?*" or "/*?".
+if pattern.end_with?("/*")
+  files0, files1 = [pattern, "#{pattern}/**"].map do |this_pattern|
+    Tempfile.open do |f|
+      system "git", "ls-files", "-z", "--cached", "--ignored",
+             "--exclude", this_pattern,
+        out: f.fileno
+      $?.success? or raise
+
+      f.rewind
+      f.each_line.to_a
+    end
+  end
+
+  matches = files0 - files1
+
+  File.write(output_file, matches.join)
+else
+  exec "git", "ls-files", "-z", "--cached", "--ignored",
+       "--exclude", pattern,
+       out: output_file
+  raise "exec failed"
+end
