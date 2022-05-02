@@ -49,8 +49,8 @@ module CheckCodeowners
 
       if options.debug
         output.merge!(
-          entries: report.codeowners.entries,
-          owner_entries: report.codeowners.owner_entries,
+          entries: repo.codeowners.entries,
+          owner_entries: repo.codeowners.owner_entries,
           all_files: check_results.all_files,
           match_map: check_results.match_map,
         )
