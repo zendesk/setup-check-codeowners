@@ -15,6 +15,8 @@ module CheckCodeowners
     end
 
     def run
+      return {} if @inputs.empty?
+
       with_output_dir do
         with_splitter_script do
           run_xargs
