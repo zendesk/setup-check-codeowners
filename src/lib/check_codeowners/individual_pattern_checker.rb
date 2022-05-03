@@ -27,10 +27,19 @@ module CheckCodeowners
       match_map = {}
       warnings = []
 
-      matched_files_collection = MultiGitLsRunner.new(owner_entries.map(&:pattern)).run
+      patterns = owner_entries.map(&:pattern)
+      patterns += patterns.select { |patt| patt.end_with?("/*") }.map { |p| "#{p}/**" }
+
+      matched_files_collection = MultiGitLsRunner.new(patterns).run
 
       owner_entries.each do |entry|
         matched_files = matched_files_collection[entry.pattern]
+
+        # There's an extra undocumented case where CODEOWNERS is not the same as gitignore:
+        # If the pattern ends with "/*", then gitignore recurses, and CODEOWNERS doesn't.
+        if entry.pattern.end_with?('/*')
+          matched_files -= matched_files_collection["#{entry.pattern}/**"]
+        end
 
         # Report on any pattern which doesn't match any files (cruft)
         if matched_files.empty?

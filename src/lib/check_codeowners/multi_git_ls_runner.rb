@@ -37,7 +37,6 @@ module CheckCodeowners
     end
 
     def with_splitter_script
-      ENV['OUTPUT_DIR'] = @output_dir
       @splitter = File.expand_path("check-codeowners-splitter", File.dirname(__FILE__))
       yield
     end
@@ -45,11 +44,11 @@ module CheckCodeowners
     def run_xargs
       Tempfile.open do |input_file|
         inputs.each do |pattern, output_file|
-          input_file.puts "#{output_file}:#{pattern}"
+          input_file.puts pattern, File.join(@output_dir, output_file)
         end
         input_file.flush
 
-        system "xargs", "-n", "1", "-P", Etc.nprocessors.to_s, @splitter,
+        system "xargs", "-n", "2", "-P", Etc.nprocessors.to_s, @splitter,
                in: input_file.path
         $?.success? or raise "xargs / git ls-files failed"
       end
