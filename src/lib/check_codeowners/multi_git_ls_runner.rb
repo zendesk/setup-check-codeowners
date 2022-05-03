@@ -1,5 +1,4 @@
 require 'etc'
-require 'shellwords'
 require 'tempfile'
 require 'tmpdir'
 
@@ -18,10 +17,8 @@ module CheckCodeowners
       return {} if @inputs.empty?
 
       with_output_dir do
-        with_splitter_script do
-          run_xargs
-          outputs_by_pattern
-        end
+        run_xargs
+        outputs_by_pattern
       end
     end
 
@@ -36,19 +33,20 @@ module CheckCodeowners
       end
     end
 
-    def with_splitter_script
-      @splitter = File.expand_path("check-codeowners-splitter", File.dirname(__FILE__))
-      yield
-    end
-
     def run_xargs
+      # For each pattern to be tested, give 3 arguments to xargs -n 3:
+      # - the first argument becomes arg0
+      # - the second argument becomes $1, and is the pattern
+      # - the third argument becomes $2, and is the output file for this pattern
+
       Tempfile.open do |input_file|
         inputs.each do |pattern, output_file|
-          input_file.puts pattern, File.join(@output_dir, output_file)
+          input_file.puts "shell-arg0", pattern, File.join(@output_dir, output_file)
         end
         input_file.flush
 
-        system "xargs", "-n", "2", "-P", Etc.nprocessors.to_s, @splitter,
+        system "xargs", "-n", "3", "-P", Etc.nprocessors.to_s,
+               "sh", "-c", 'exec git ls-files -z --cached --ignored --exclude "$1" > "$2"',
                in: input_file.path
         $?.success? or raise "xargs / git ls-files failed"
       end

@@ -1,2 +1,0 @@
-#!/bin/bash
-exec git ls-files -z --cached --ignored --exclude "$1" > "$2"
