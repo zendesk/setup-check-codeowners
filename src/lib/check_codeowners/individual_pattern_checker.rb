@@ -1,5 +1,9 @@
 module CheckCodeowners
   class IndividualPatternChecker
+    # Given some owner_entries (i.e. a pattern and some owners),
+    # *for each one individually* work out which actual files (as reported
+    # by `git ls-files`) match that codeowners pattern.
+
     def initialize(owner_entries)
       @owner_entries = owner_entries
     end
@@ -27,16 +31,34 @@ module CheckCodeowners
       match_map = {}
       warnings = []
 
+      # According to https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners ,
+      # CODEOWNERS patterns are _quite like_ (but not the same as) the
+      # patterns used by "gitignore", so we're going to use git itself to
+      # do all the pattern matching (in "MultiGitLsRunner").
+
+      # However, one of the (undocumented) ways in which CODEOWNERS patterns
+      # are *not* the same as gitignore patterns is if the pattern ends
+      # in `/*`: for gitignore, that `*` matches both files and
+      # subdirectories; whereas for CODEOWNERS, the `*` only matches files.
+
+      # To deal with this, every time we see a `/*` pattern, we also ask git
+      # to pattern match any subtrees, which we then remove from the match
+      # list. So for example if the CODEOWNERS pattern is `/lib/*`, then
+      # we'll ask git to provide the match results for `/lib/*` and also
+      # `/lib/*/**`.
+
+      # Which gitignore patterns we need match results for: all the
+      # CODEOWNERS patterns, plus the `/* -> /*/**` additions.
       patterns = owner_entries.map(&:pattern)
       patterns += patterns.select { |patt| patt.end_with?("/*") }.map { |p| "#{p}/**" }
 
+      # Get a hash of { gitignore_pattern => [files matching it] }
       matched_files_collection = MultiGitLsRunner.new(patterns).run
 
       owner_entries.each do |entry|
         matched_files = matched_files_collection[entry.pattern]
 
-        # There's an extra undocumented case where CODEOWNERS is not the same as gitignore:
-        # If the pattern ends with "/*", then gitignore recurses, and CODEOWNERS doesn't.
+        # Apply the `/*/**` subtree removal hack
         if entry.pattern.end_with?('/*')
           matched_files -= matched_files_collection["#{entry.pattern}/**"]
         end
@@ -50,6 +72,11 @@ module CheckCodeowners
           }
         end
 
+        # For each file matching this CODEOWNERS pattern, update the
+        # match_map. We process the owner entries in order, so it's
+        # possible that a later pattern matches the same file and
+        # overwrites; this implements the "latest wins" logic of
+        # CODEOWNERS.
         matched_files.each do |file|
           match_map[file] = entry
         end

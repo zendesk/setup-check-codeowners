@@ -6,10 +6,21 @@ module CheckCodeowners
   class MultiGitLsRunner
     PREFIX_LENGTH = 6
 
+    Input = Struct.new(:pattern, :output_basename)
+
+    # Given some gitignore patterns (as opposed to CODEOWNERS patterns),
+    # work out which files match each pattern.
+
+    # The approach here is to use
+    # `git ls-files --ignored --exclude=PATTERN` for each pattern, to get
+    # git itself to do all the pattern matching.
+    #
+    # For better performance, we use "xargs --parallel" to run multiple
+    # of these in parallel.
+
     def initialize(patterns)
-      # Each arg to the script will be "<output_file>:<pattern>"
       @inputs = patterns.sort.uniq.each_with_index.map do |pattern, index|
-        [ pattern, "%0#{PREFIX_LENGTH}d" % index ]
+        Input.new(pattern, index.to_s)
       end
     end
 
@@ -34,14 +45,14 @@ module CheckCodeowners
     end
 
     def run_xargs
-      # For each pattern to be tested, give 3 arguments to xargs -n 3:
+      # For each pattern to be tested, give 3 arguments to `xargs -n 3`:
       # - the first argument becomes arg0
       # - the second argument becomes $1, and is the pattern
       # - the third argument becomes $2, and is the output file for this pattern
 
       Tempfile.open do |input_file|
-        inputs.each do |pattern, output_file|
-          input_file.puts "shell-arg0", pattern, File.join(@output_dir, output_file)
+        inputs.each do |input|
+          input_file.puts "shell-arg0", input.pattern, File.join(@output_dir, input.output_basename)
         end
         input_file.flush
 
@@ -53,10 +64,10 @@ module CheckCodeowners
     end
 
     def outputs_by_pattern
-      inputs.map do |pattern, output_file|
-        file = File.join(@output_dir, output_file)
+      inputs.map do |input|
+        file = File.join(@output_dir, input.output_basename)
         results = File.read(file).split("\0")
-        [pattern, results]
+        [input.pattern, results]
       end.to_h
     end
   end
