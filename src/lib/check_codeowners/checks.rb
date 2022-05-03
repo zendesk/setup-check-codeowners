@@ -81,9 +81,7 @@ module CheckCodeowners
     # Errors if there are files that don't have an owner (except if the file is included in ignore)
     def check_unowned_files
       all_files = repo.git_ls.all_files.to_set
-      owned_files = repo.git_ls.matching_files(
-        repo.codeowners.owner_entries.map(&:pattern)
-      ).to_set
+      owned_files = repo.individual_pattern_checker.match_map.keys.to_set
       unowned_files = (all_files - owned_files).to_set
 
       ignore_file = repo.codeowners_ignore

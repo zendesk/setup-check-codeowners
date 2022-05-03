@@ -54,4 +54,16 @@ RSpec.describe "check-codeowners --files-owned" do
     expect_silent_success { run "--files-owned" }
   end
 
+  it "can own a folder without nesting" do
+    create_file "file1"
+    create_file "foo/file1"
+    add_codeowners "/* @foo/bar"
+
+    r = run "--files-owned", "@foo/bar"
+    aggregate_failures do
+      expect(r.status).to be_success
+      expect(r.stdout.lines.map(&:chomp)).to contain_exactly("file1\t@foo/bar")
+      expect(r.stderr).to eq("")
+    end
+  end
 end

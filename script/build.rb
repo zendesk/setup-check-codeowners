@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'tempfile'
+require 'fileutils'
 
 def build(input, out)
   File.readlines(input).each do |line|
@@ -19,7 +20,6 @@ start = "src/main.rb"
 output = "bin/check-codeowners"
 
 Tempfile.open('build', File.dirname(output)) do |out|
-
   out.print <<~INTRO
     #!/usr/bin/env ruby
 

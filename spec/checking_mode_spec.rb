@@ -99,6 +99,18 @@ RSpec.describe "check-codeowners checking mode" do
       expect_silent_success { run "--check-unowned" }
     end
 
+    it "respects the /*-rule" do
+      create_file("subdir/unowned")
+      add_codeowners "/*       @a/b"
+      add_codeowners "/.github @a/b"
+      r = run "--check-unowned"
+      aggregate_failures do
+        expect(r.status.exitstatus).to eq(1)
+        expect(r.stdout).to eq("ERROR: Please add this file to .github/CODEOWNERS: subdir/unowned\n" + help_message)
+        expect(r.stderr).to eq("")
+      end
+    end
+
   end
 
   describe "indenting" do

@@ -8,18 +8,6 @@ module CheckCodeowners
         @all_files ||= git_ls_files(args: [])
       end
 
-      def matching_files(patterns)
-        Tempfile.open do |tmpfile|
-          patterns.each do |pattern|
-            tmpfile.puts pattern
-          end
-
-          tmpfile.flush
-
-          git_ls_files(args: ["--cached", "--ignored", "--exclude-from", tmpfile.path])
-        end
-      end
-
       private
 
       def git_ls_files(args:)
