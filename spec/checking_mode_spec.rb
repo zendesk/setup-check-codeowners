@@ -106,7 +106,7 @@ RSpec.describe "check-codeowners checking mode" do
       r = run "--check-unowned"
       aggregate_failures do
         expect(r.status.exitstatus).to eq(1)
-        expect(r.stdout).to eq("ERROR: Please add this file to .github/CODEOWNERS: subdir/unowned\n" + help_message)
+        expect(r.stdout).to eq("ERROR: Please add this file to .github/CODEOWNERS: /subdir/unowned\n" + help_message)
         expect(r.stderr).to eq("")
       end
     end
