@@ -17,13 +17,13 @@ RSpec.describe "check-codeowners --debug" do
     add_codeowners "x* @foo/bar"
 
     r0 = run "--json", "--brute-force"
-    expect(r0.status).to be_success
+    expect(r0.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
     data0 = JSON.parse(r0.stdout)
 
     r1 = run "--debug", "--json", "--brute-force"
 
     aggregate_failures do
-      expect(r1.status).to be_success
+      expect(r1.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
       expect(r1.stderr).to eq("")
     end
 

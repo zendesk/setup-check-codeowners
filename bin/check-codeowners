@@ -245,6 +245,46 @@ module CheckCodeowners
   end
 end
 
+require 'pathname'
+
+module CheckCodeowners
+  class CLI
+    STATUS_SUCCESS = 0
+    STATUS_ERROR   = 1
+
+    def initialize(root_path:)
+      @root_path = Pathname.new(root_path)
+    end
+
+    attr_reader :root_path
+
+    def run(args = ARGV)
+      options = CheckCodeowners::GetOptions.new(args)
+
+      repo = CheckCodeowners::Repository::Repository.new(root_path: @root_path)
+
+      if options.who_owns
+        CheckCodeowners::Reports.new(repo, options).who_owns
+        return STATUS_SUCCESS
+      end
+
+      if options.files_owned
+        CheckCodeowners::Reports.new(repo, options).files_owned
+        return STATUS_SUCCESS
+      end
+
+      checker = CheckCodeowners::CheckRunner.new(repo, options)
+      checker.show_checks
+
+      if checker.errors?
+        STATUS_ERROR
+      else
+        STATUS_SUCCESS
+      end
+    end
+  end
+end
+
 require 'optparse'
 
 module CheckCodeowners
@@ -350,8 +390,9 @@ module CheckCodeowners
     # *for each one individually* work out which actual files (as reported
     # by `git ls-files`) match that codeowners pattern.
 
-    def initialize(owner_entries)
+    def initialize(owner_entries, root_path:)
       @owner_entries = owner_entries
+      @root_path = root_path
     end
 
     def match_map
@@ -364,7 +405,7 @@ module CheckCodeowners
 
     private
 
-    attr_reader :owner_entries
+    attr_reader :owner_entries, :root_path
 
     def results
       @results ||= check_individual_patterns
@@ -399,7 +440,7 @@ module CheckCodeowners
       patterns += patterns.select { |patt| patt.end_with?("/*") }.map { |p| "#{p}/**" }
 
       # Get a hash of { gitignore_pattern => [files matching it] }
-      matched_files_collection = MultiGitLsRunner.new(patterns).run
+      matched_files_collection = MultiGitLsRunner.new(patterns, root_path: root_path).run
 
       owner_entries.each do |entry|
         matched_files = matched_files_collection[entry.pattern]
@@ -458,10 +499,11 @@ module CheckCodeowners
     # For better performance, we use "xargs --parallel" to run multiple
     # of these in parallel.
 
-    def initialize(patterns)
+    def initialize(patterns, root_path:)
       @inputs = patterns.sort.uniq.each_with_index.map do |pattern, index|
         Input.new(pattern, index.to_s)
       end
+      @root_path = root_path
     end
 
     def run
@@ -475,7 +517,7 @@ module CheckCodeowners
 
     private
 
-    attr_reader :inputs
+    attr_reader :inputs, :root_path
 
     def with_output_dir
       Dir.mktmpdir do |tmpdir|
@@ -498,6 +540,7 @@ module CheckCodeowners
 
         system "xargs", "-n", "3", "-P", Etc.nprocessors.to_s,
                "sh", "-c", 'exec git ls-files -z --cached --ignored --exclude "$1" > "$2"',
+               chdir: root_path,
                in: input_file.path
         $?.success? or raise "xargs / git ls-files failed"
       end
@@ -580,12 +623,13 @@ end
 module CheckCodeowners
   module Repository
     class Codeowners
-      def initialize(path)
+      def initialize(path, root_path:)
         @path = path
+        @root_path = root_path
         parse
       end
 
-      attr_reader :path, :entries, :errors
+      attr_reader :path, :root_path, :entries, :errors
 
       def owner_entries
         @owner_entries ||= entries.select { |e| e.is_a?(OwnerEntry) }
@@ -595,7 +639,7 @@ module CheckCodeowners
 
       def parse
         lines = begin
-                  IO.readlines(path).map(&:chomp)
+                  IO.readlines(root_path.join(path)).map(&:chomp)
                 rescue Errno::ENOENT
                   []
                 end
@@ -637,11 +681,12 @@ module CheckCodeowners
     class CodeownersIgnore
       Entry = Struct.new(:text, :filename, :line_number, keyword_init: true)
 
-      def initialize(path)
+      def initialize(path, root_path:)
         @path = path
+        @root_path = root_path
       end
 
-      attr_reader :path
+      attr_reader :path, :root_path
 
       def check_sorted
         errors = []
@@ -677,7 +722,7 @@ module CheckCodeowners
         return @entries if defined? @entries
 
         lines = begin
-                  IO.readlines(path).map(&:chomp)
+                  IO.readlines(root_path.join(path)).map(&:chomp)
                 rescue Errno::ENOENT
                   []
                 end
@@ -725,21 +770,29 @@ module CheckCodeowners
   end
 end
 
+require 'open3'
 require 'shellwords'
 require 'tempfile'
 
 module CheckCodeowners
   module Repository
     class GitLs
+      def initialize(root_path:)
+        @root_path = root_path
+      end
+
+      attr_reader :root_path
+
       def all_files
-        @all_files ||= git_ls_files(args: [])
+        @all_files ||= git_ls_files
       end
 
       private
 
-      def git_ls_files(args:)
-        output = `git ls-files -z #{Shellwords.shelljoin(args)}`
-        $?.success? or raise "git ls-files #{args.inspect} failed"
+      def git_ls_files
+        command = "git ls-files -z"
+        output, status = Open3.capture2(command, chdir: root_path)
+        status.success? or raise "#{command} failed"
 
         output.split("\0")
       end
@@ -775,27 +828,30 @@ module CheckCodeowners
         ".github/CODEOWNERS",
       ].freeze
 
-      # The repository directory is always the current directory.
-      # Maybe that could be changed one day.
+      def initialize(root_path:)
+        @root_path = root_path
+      end
+
+      attr_reader :root_path
 
       def git_ls
-        @git_ls ||= GitLs.new
+        @git_ls ||= GitLs.new(root_path: root_path)
       end
 
       def individual_pattern_checker
-        @individual_pattern_checker ||= IndividualPatternChecker.new(codeowners.owner_entries)
+        @individual_pattern_checker ||= IndividualPatternChecker.new(codeowners.owner_entries, root_path: root_path)
       end
 
       def codeowners
-        @codeowners ||= Codeowners.new(codeowners_file)
+        @codeowners ||= Codeowners.new(codeowners_file, root_path: root_path)
       end
 
       def codeowners_ignore
-        @codeowners_ignore ||= CodeownersIgnore.new(codeowners_ignore_file)
+        @codeowners_ignore ||= CodeownersIgnore.new(codeowners_ignore_file, root_path: root_path)
       end
 
       def valid_owners
-        @valid_owners ||= ValidOwners.new(validowners_file)
+        @valid_owners ||= ValidOwners.new(validowners_file, root_path: root_path)
       end
 
       private
@@ -815,7 +871,7 @@ module CheckCodeowners
       # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-file-location
       def find_codeowners_file
         CODEOWNERS_PATHS.find do |path|
-          File.exist?(path)
+          root_path.join(path).exist?
         end || CODEOWNERS_PATHS.last
       end
     end
@@ -825,8 +881,9 @@ end
 module CheckCodeowners
   module Repository
     class ValidOwners
-      def initialize(path)
+      def initialize(path, root_path:)
         @path = path
+        @root_path = root_path
       end
 
       def valid_owners
@@ -835,11 +892,11 @@ module CheckCodeowners
 
       private
 
-      attr_reader :path
+      attr_reader :path, :root_path
 
       def parse
         begin
-          IO.readlines(path).map(&:chomp)
+          IO.readlines(root_path.join(path)).map(&:chomp)
         rescue Errno::ENOENT
           nil
         end
@@ -851,21 +908,6 @@ end
 
 
 
-options = CheckCodeowners::GetOptions.new(ARGV)
-
-repo = CheckCodeowners::Repository::Repository.new
-
-if options.who_owns
-  CheckCodeowners::Reports.new(repo, options).who_owns
-  exit
-end
-
-if options.files_owned
-  CheckCodeowners::Reports.new(repo, options).files_owned
-  exit
-end
-
-checker = CheckCodeowners::CheckRunner.new(repo, options)
-checker.show_checks
-exit 1 if checker.errors?
-exit 0
+cli = CheckCodeowners::CLI.new(root_path: Dir.pwd)
+exit_status = cli.run
+exit exit_status

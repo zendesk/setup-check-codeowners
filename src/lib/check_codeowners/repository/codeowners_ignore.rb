@@ -3,11 +3,12 @@ module CheckCodeowners
     class CodeownersIgnore
       Entry = Struct.new(:text, :filename, :line_number, keyword_init: true)
 
-      def initialize(path)
+      def initialize(path, root_path:)
         @path = path
+        @root_path = root_path
       end
 
-      attr_reader :path
+      attr_reader :path, :root_path
 
       def check_sorted
         errors = []
@@ -43,7 +44,7 @@ module CheckCodeowners
         return @entries if defined? @entries
 
         lines = begin
-                  IO.readlines(path).map(&:chomp)
+                  IO.readlines(root_path.join(path)).map(&:chomp)
                 rescue Errno::ENOENT
                   []
                 end

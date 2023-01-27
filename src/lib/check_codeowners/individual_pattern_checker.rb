@@ -4,8 +4,9 @@ module CheckCodeowners
     # *for each one individually* work out which actual files (as reported
     # by `git ls-files`) match that codeowners pattern.
 
-    def initialize(owner_entries)
+    def initialize(owner_entries, root_path:)
       @owner_entries = owner_entries
+      @root_path = root_path
     end
 
     def match_map
@@ -18,7 +19,7 @@ module CheckCodeowners
 
     private
 
-    attr_reader :owner_entries
+    attr_reader :owner_entries, :root_path
 
     def results
       @results ||= check_individual_patterns
@@ -53,7 +54,7 @@ module CheckCodeowners
       patterns += patterns.select { |patt| patt.end_with?("/*") }.map { |p| "#{p}/**" }
 
       # Get a hash of { gitignore_pattern => [files matching it] }
-      matched_files_collection = MultiGitLsRunner.new(patterns).run
+      matched_files_collection = MultiGitLsRunner.new(patterns, root_path: root_path).run
 
       owner_entries.each do |entry|
         matched_files = matched_files_collection[entry.pattern]

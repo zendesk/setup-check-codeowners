@@ -17,7 +17,7 @@ RSpec.describe "check-codeowners --files-owned" do
     r = run "--files-owned", "@foo/bar"
 
     aggregate_failures do
-      expect(r.status).to be_success
+      expect(r.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
       expect(r.stdout.lines.map(&:chomp)).to contain_exactly(
         "file1\t@foo/bar",
         "file2\t@foo/bar",
@@ -37,7 +37,7 @@ RSpec.describe "check-codeowners --files-owned" do
     r = run "--files-owned", "@foo/bar", "@foo/thing"
 
     aggregate_failures do
-      expect(r.status).to be_success
+      expect(r.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
       expect(r.stdout.lines.map(&:chomp)).to contain_exactly(
         "file1\t@foo/bar",
         "file2\t@foo/bar",
@@ -61,7 +61,7 @@ RSpec.describe "check-codeowners --files-owned" do
 
     r = run "--files-owned", "@foo/bar"
     aggregate_failures do
-      expect(r.status).to be_success
+      expect(r.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
       expect(r.stdout.lines.map(&:chomp)).to contain_exactly("file1\t@foo/bar")
       expect(r.stderr).to eq("")
     end

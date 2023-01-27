@@ -1,5 +1,6 @@
 require_relative './check_codeowners/check_runner'
 require_relative './check_codeowners/checks'
+require_relative './check_codeowners/cli'
 require_relative './check_codeowners/get_options'
 require_relative './check_codeowners/individual_pattern_checker'
 require_relative './check_codeowners/multi_git_ls_runner'

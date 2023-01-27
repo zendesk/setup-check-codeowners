@@ -17,7 +17,7 @@ RSpec.describe "check-codeowners --who-owns" do
     r = run "--who-owns", "x2"
 
     aggregate_failures do
-      expect(r.status).to be_success
+      expect(r.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
       expect(r.stdout.lines.map(&:chomp)).to contain_exactly(
         "x2\t@foo/bar",
       )
@@ -34,7 +34,7 @@ RSpec.describe "check-codeowners --who-owns" do
     r = run "--who-owns", "y"
 
     aggregate_failures do
-      expect(r.status).to be_success
+      expect(r.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
       expect(r.stdout.lines.map(&:chomp)).to contain_exactly(
         "y\t-",
       )
@@ -51,7 +51,7 @@ RSpec.describe "check-codeowners --who-owns" do
     r = run "--who-owns"
 
     aggregate_failures do
-      expect(r.status).to be_success
+      expect(r.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
       expect(r.stdout.lines.map(&:chomp)).to contain_exactly(
         ".github/CODEOWNERS\t-",
         "x1\t@foo/bar",
@@ -74,7 +74,7 @@ RSpec.describe "check-codeowners --who-owns" do
       r = run "--who-owns"
 
       aggregate_failures do
-        expect(r.status).to be_success
+        expect(r.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
         expect(r.stdout.lines.map(&:chomp)).to contain_exactly(
           ".github/CODEOWNERS\t-",
           "x1\t@foo/bar2",
@@ -91,7 +91,7 @@ RSpec.describe "check-codeowners --who-owns" do
       r = run "--who-owns"
 
       aggregate_failures do
-        expect(r.status).to be_success
+        expect(r.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
         expect(r.stdout.lines.map(&:chomp)).to contain_exactly(
           ".github/CODEOWNERS\t-",
           "x1\t@foo/bar1", # Different from test 1
