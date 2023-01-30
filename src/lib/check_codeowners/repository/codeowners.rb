@@ -1,12 +1,13 @@
 module CheckCodeowners
   module Repository
     class Codeowners
-      def initialize(path)
+      def initialize(path, root_path:)
         @path = path
+        @root_path = root_path
         parse
       end
 
-      attr_reader :path, :entries, :errors
+      attr_reader :path, :root_path, :entries, :errors
 
       def owner_entries
         @owner_entries ||= entries.select { |e| e.is_a?(OwnerEntry) }
@@ -16,7 +17,7 @@ module CheckCodeowners
 
       def parse
         lines = begin
-                  IO.readlines(path).map(&:chomp)
+                  IO.readlines(root_path.join(path)).map(&:chomp)
                 rescue Errno::ENOENT
                   []
                 end

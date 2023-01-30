@@ -1,18 +1,9 @@
 require 'fileutils'
-require 'open3'
 require 'set'
 require 'tmpdir'
+require_relative '../src/lib/check_codeowners'
 
 module TestHelpers
-
-  CODEOWNERS_EXECUTABLE = File.expand_path(
-    File.join(
-      File.dirname(__FILE__),
-      "..",
-      "bin",
-      "check-codeowners",
-    )
-  )
 
   HELP_MESSAGE = "For help, see https://github.com/zendesk/setup-check-codeowners/blob/main/Usage.md\n"
 
@@ -48,7 +39,7 @@ module TestHelpers
     r = yield
 
     aggregate_failures do
-      expect(r.status).to be_success
+      expect(r.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
       expect(r.stdout).to eq("")
       expect(r.stderr).to eq("")
     end
@@ -70,9 +61,21 @@ module TestHelpers
       system "git init --quiet && git add .", chdir: dir
       $?.success? or raise "git init / add failed"
 
-      stdout, stderr, status = Open3.capture3(CODEOWNERS_EXECUTABLE, *args, chdir: dir)
+      result = {}
+      begin
+        $stdout = StringIO.new
+        $stderr = StringIO.new
 
-      Result.new(stdout, stderr, status)
+        cli = CheckCodeowners::CLI.new(root_path: dir)
+        result[:status] = cli.run(args)
+        result[:stdout] = $stdout.string
+        result[:stderr] = $stderr.string
+      ensure
+        $stdout = STDOUT
+        $stderr = STDERR
+      end
+
+      Result.new(result[:stdout], result[:stderr], result[:status])
     end
   end
 

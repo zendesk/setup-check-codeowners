@@ -1,8 +1,9 @@
 module CheckCodeowners
   module Repository
     class ValidOwners
-      def initialize(path)
+      def initialize(path, root_path:)
         @path = path
+        @root_path = root_path
       end
 
       def valid_owners
@@ -11,11 +12,11 @@ module CheckCodeowners
 
       private
 
-      attr_reader :path
+      attr_reader :path, :root_path
 
       def parse
         begin
-          IO.readlines(path).map(&:chomp)
+          IO.readlines(root_path.join(path)).map(&:chomp)
         rescue Errno::ENOENT
           nil
         end

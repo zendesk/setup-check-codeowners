@@ -49,7 +49,7 @@ RSpec.describe "check-codeowners checking mode" do
     it "warns" do
       r = run "--brute-force"
       aggregate_failures do
-        expect(r.status.exitstatus).to eq(0)
+        expect(r.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
         expect(r.stdout).to eq("WARNING: Pattern foo at .github/CODEOWNERS:1 doesn't match any files\n" + help_message)
         expect(r.stderr).to eq("")
       end
@@ -58,7 +58,7 @@ RSpec.describe "check-codeowners checking mode" do
     it "turns warnings into errors in --strict mode" do
       r = run "--brute-force", "--strict"
       aggregate_failures do
-        expect(r.status.exitstatus).to eq(1)
+        expect(r.status).to eq(CheckCodeowners::CLI::STATUS_ERROR)
         expect(r.stdout).to eq("ERROR: Pattern foo at .github/CODEOWNERS:1 doesn't match any files\n" + help_message)
         expect(r.stderr).to eq("")
       end
@@ -87,7 +87,7 @@ RSpec.describe "check-codeowners checking mode" do
       add_codeowners ".github @a/b"
       r = run "--check-unowned"
       aggregate_failures do
-        expect(r.status.exitstatus).to eq(1)
+        expect(r.status).to eq(CheckCodeowners::CLI::STATUS_ERROR)
         expect(r.stdout).to eq("ERROR: Please add this file to .github/CODEOWNERS: /unowned\n" + help_message)
         expect(r.stderr).to eq("")
       end
@@ -105,7 +105,7 @@ RSpec.describe "check-codeowners checking mode" do
       add_codeowners "/.github @a/b"
       r = run "--check-unowned"
       aggregate_failures do
-        expect(r.status.exitstatus).to eq(1)
+        expect(r.status).to eq(CheckCodeowners::CLI::STATUS_ERROR)
         expect(r.stdout).to eq("ERROR: Please add this file to .github/CODEOWNERS: /subdir/unowned\n" + help_message)
         expect(r.stderr).to eq("")
       end
@@ -129,7 +129,7 @@ RSpec.describe "check-codeowners checking mode" do
         add_codeowners "fooooo    @a/b"
         r = run
         aggregate_failures do
-          expect(r.status.exitstatus).to eq(1)
+          expect(r.status).to eq(CheckCodeowners::CLI::STATUS_ERROR)
           expect(r.stdout).to eq("ERROR: Mismatched indent at .github/CODEOWNERS:2\n" + help_message)
           expect(r.stderr).to eq("")
         end
@@ -166,7 +166,7 @@ RSpec.describe "check-codeowners checking mode" do
         r = run
 
         aggregate_failures do
-          expect(r.status.exitstatus).to eq(1)
+          expect(r.status).to eq(CheckCodeowners::CLI::STATUS_ERROR)
           expect(r.stdout).to eq("ERROR: Invalid owner @org/team1 at .github/CODEOWNERS:1\n" + help_message)
           expect(r.stderr).to eq("")
         end
@@ -207,7 +207,7 @@ RSpec.describe "check-codeowners checking mode" do
     r = run
 
     aggregate_failures do
-      expect(r.status.exitstatus).to eq(1)
+      expect(r.status).to eq(CheckCodeowners::CLI::STATUS_ERROR)
       expect(r.stdout).to eq("ERROR: Unrecognised line at .github/CODEOWNERS:2\n" + help_message)
       expect(r.stderr).to eq("")
     end
@@ -224,7 +224,7 @@ RSpec.describe "check-codeowners checking mode" do
       r = run "--check-unowned"
 
       aggregate_failures do
-        expect(r.status.exitstatus).to eq(0)
+        expect(r.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
         expect(r.stdout).to eq("WARNING: The following entry in .github/CODEOWNERS.ignore doesn't match any unowned files and should be removed: c*\n" + help_message)
         expect(r.stderr).to eq("")
       end
@@ -242,7 +242,7 @@ RSpec.describe "check-codeowners checking mode" do
       require 'json'
       data = JSON.parse(r.stdout)
 
-      expect(r.status).to be_success
+      expect(r.status).to eq(CheckCodeowners::CLI::STATUS_SUCCESS)
       expect(data).to eq({"errors"=>[], "warnings"=>[]})
     end
 
@@ -255,7 +255,7 @@ RSpec.describe "check-codeowners checking mode" do
       data = JSON.parse(r.stdout)
 
       aggregate_failures do
-        expect(r.status.exitstatus).to eq(1)
+        expect(r.status).to eq(CheckCodeowners::CLI::STATUS_ERROR)
         expect(data["warnings"].length).to eq(0)
         expect(data["errors"].length).to eq(1)
         item = data["errors"].first
@@ -272,7 +272,7 @@ RSpec.describe "check-codeowners checking mode" do
       data = JSON.parse(r.stdout)
 
       aggregate_failures do
-        expect(r.status.exitstatus).to eq(1)
+        expect(r.status).to eq(CheckCodeowners::CLI::STATUS_ERROR)
         expect(data["errors"].length).to eq(1)
         item = data["errors"].first
         expect(item["code"]).to eq("unrecognised_line")
@@ -301,7 +301,7 @@ RSpec.describe "check-codeowners checking mode" do
       r = run
 
       aggregate_failures do
-        expect(r.status.exitstatus).to eq(1)
+        expect(r.status).to eq(CheckCodeowners::CLI::STATUS_ERROR)
         expect(r.stdout).to eq("ERROR: Lines are not sorted at .github/CODEOWNERS:3\n" + help_message)
         expect(r.stderr).to eq("")
       end
@@ -342,7 +342,7 @@ RSpec.describe "check-codeowners checking mode" do
       r = run "--check-unowned"
 
       aggregate_failures do
-        expect(r.status.exitstatus).to eq(1)
+        expect(r.status).to eq(CheckCodeowners::CLI::STATUS_ERROR)
         expect(r.stdout).to eq("ERROR: Lines are not sorted at .github/CODEOWNERS.ignore:4\n" + help_message)
         expect(r.stderr).to eq("")
       end

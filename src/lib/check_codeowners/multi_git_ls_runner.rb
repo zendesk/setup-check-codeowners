@@ -18,10 +18,11 @@ module CheckCodeowners
     # For better performance, we use "xargs --parallel" to run multiple
     # of these in parallel.
 
-    def initialize(patterns)
+    def initialize(patterns, root_path:)
       @inputs = patterns.sort.uniq.each_with_index.map do |pattern, index|
         Input.new(pattern, index.to_s)
       end
+      @root_path = root_path
     end
 
     def run
@@ -35,7 +36,7 @@ module CheckCodeowners
 
     private
 
-    attr_reader :inputs
+    attr_reader :inputs, :root_path
 
     def with_output_dir
       Dir.mktmpdir do |tmpdir|
@@ -58,6 +59,7 @@ module CheckCodeowners
 
         system "xargs", "-n", "3", "-P", Etc.nprocessors.to_s,
                "sh", "-c", 'exec git ls-files -z --cached --ignored --exclude "$1" > "$2"',
+               chdir: root_path,
                in: input_file.path
         $?.success? or raise "xargs / git ls-files failed"
       end
