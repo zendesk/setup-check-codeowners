@@ -371,12 +371,47 @@ module CheckCodeowners
     end
 
     def check_individual_patterns
-      # Slow but thorough: use git to check which files each individual pattern matches
-      # May not scale well!
+      fast_matches, slow_patterns = find_fast_matches(owner_entries.map(&:pattern))
+      slow_matches = find_slow_matches(slow_patterns)
+      collate(fast_matches.merge(slow_matches))
+    end
 
-      match_map = {}
-      warnings = []
+    def find_fast_matches(patterns)
+      # Fast match (not using git to do the matching) "simple" patterns:
+      #   /foo/bar (where that file exists) => matches exactly that file
+      #   /foo/bar/ (where at least one file has that prefix) => matches those files
 
+      # Everything else is collected into "slow_patterns", for matching via `git`
+
+      all_files = Repository::GitLs.new.all_files # Haven't we already got this data?
+      fast_matches_collection = {}
+      slow_patterns = []
+
+      patterns.each do |pattern|
+        if pattern.match?(/\A(\/[^?*\[]+)*\/\z/)
+          pattern_without_slash = pattern[1..-1]
+          prefix_matches = all_files.select { |path| path.start_with?(pattern_without_slash) }
+          if prefix_matches.any?
+            fast_matches_collection[pattern] = prefix_matches
+            next
+          end
+        end
+
+        if pattern.match?(/\A(\/[^?*\[]+)+\z/)
+          pattern_without_slash = pattern[1..-1]
+          if all_files.include?(pattern_without_slash)
+            fast_matches_collection[pattern] = [pattern_without_slash]
+            next
+          end
+        end
+
+        slow_patterns << pattern
+      end
+
+      [fast_matches_collection, slow_patterns]
+    end
+
+    def find_slow_matches(patterns)
       # According to https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners ,
       # CODEOWNERS patterns are _quite like_ (but not the same as) the
       # patterns used by "gitignore", so we're going to use git itself to
@@ -395,11 +430,14 @@ module CheckCodeowners
 
       # Which gitignore patterns we need match results for: all the
       # CODEOWNERS patterns, plus the `/* -> /*/**` additions.
-      patterns = owner_entries.map(&:pattern)
       patterns += patterns.select { |patt| patt.end_with?("/*") }.map { |p| "#{p}/**" }
 
-      # Get a hash of { gitignore_pattern => [files matching it] }
-      matched_files_collection = MultiGitLsRunner.new(patterns).run
+      MultiGitLsRunner.new(patterns).run
+    end
+
+    def collate(matched_files_collection)
+      match_map = {}
+      warnings = []
 
       owner_entries.each do |entry|
         matched_files = matched_files_collection[entry.pattern]
