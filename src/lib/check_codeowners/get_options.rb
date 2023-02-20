@@ -6,7 +6,7 @@ module CheckCodeowners
       @debug = false
       @show_json = false
       @strict = false
-      @find_redundant_ignores = false
+      @find_no_matches = false
       @who_owns = false
       @files_owned = false
       @check_unowned = false
@@ -17,14 +17,14 @@ module CheckCodeowners
       validate
     end
 
-    attr_reader :debug, :show_json, :strict, :find_redundant_ignores,
+    attr_reader :debug, :show_json, :strict, :find_no_matches,
                 :who_owns, :files_owned,
                 :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
                 :args
 
     private
 
-    attr_writer :debug, :show_json, :strict, :find_redundant_ignores,
+    attr_writer :debug, :show_json, :strict, :find_no_matches,
                 :who_owns, :files_owned,
                 :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
                 :args
@@ -39,8 +39,8 @@ module CheckCodeowners
         opts.on("-s", "--strict", "Treat warnings as errors") do
           self.strict = true
         end
-        opts.on("-b", "--brute-force", "Find entries which do not match any files") do
-          self.find_redundant_ignores = true
+        opts.on("--find-no-matches", "Find entries which do not match any files") do
+          self.find_no_matches = true
         end
         opts.on("--no-check-indent", "Do not require equal indenting") do |value|
           self.should_check_indent = value

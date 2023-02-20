@@ -16,11 +16,11 @@ RSpec.describe "check-codeowners --debug" do
     create_file "y"
     add_codeowners "x* @foo/bar"
 
-    r0 = run "--json", "--brute-force"
+    r0 = run "--json", "--find-no-matches"
     expect(r0.status).to be_success
     data0 = JSON.parse(r0.stdout)
 
-    r1 = run "--debug", "--json", "--brute-force"
+    r1 = run "--debug", "--json", "--find-no-matches"
 
     aggregate_failures do
       expect(r1.status).to be_success

@@ -27,7 +27,7 @@ module CheckCodeowners
 
     def files_owned
       results = repo.git_ls.all_files.map do |file|
-        # We don't *have* to brute force every pattern - we could instead
+        # We don't *have* to check every pattern - we could instead
         # run git ls-files per owner, not per pattern. But we already have
         # the code, so it's convenient.
         # Discards warnings

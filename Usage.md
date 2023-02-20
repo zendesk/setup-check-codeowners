@@ -20,7 +20,7 @@ The exit status is 2 if there were any errors, or 0 otherwise.
 
 You can also get the output as json with `--json`.
 
-The remaining options control which checks run: for the full set, use `--brute-force --check-unowned --strict`.
+The remaining options control which checks run: for the full set, use `--find-no-matches --check-unowned --strict`.
 
 See [Errors and warnings](#errors-and-warnings) for a description of the checks that are run.
 
