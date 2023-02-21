@@ -235,7 +235,7 @@ module CheckCodeowners
                     repo.git_ls.all_files.sort
                   end
 
-      match_map = if options.find_redundant_ignores
+      match_map = if options.find_no_matches
                     warnings.concat(repo.individual_pattern_checker.warnings)
                     repo.individual_pattern_checker.match_map
                   end
@@ -253,7 +253,7 @@ module CheckCodeowners
       @debug = false
       @show_json = false
       @strict = false
-      @find_redundant_ignores = false
+      @find_no_matches = false
       @who_owns = false
       @files_owned = false
       @check_unowned = false
@@ -264,14 +264,14 @@ module CheckCodeowners
       validate
     end
 
-    attr_reader :debug, :show_json, :strict, :find_redundant_ignores,
+    attr_reader :debug, :show_json, :strict, :find_no_matches,
                 :who_owns, :files_owned,
                 :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
                 :args
 
     private
 
-    attr_writer :debug, :show_json, :strict, :find_redundant_ignores,
+    attr_writer :debug, :show_json, :strict, :find_no_matches,
                 :who_owns, :files_owned,
                 :check_unowned, :should_check_indent, :should_check_sorted, :should_check_valid_owners,
                 :args
@@ -286,8 +286,8 @@ module CheckCodeowners
         opts.on("-s", "--strict", "Treat warnings as errors") do
           self.strict = true
         end
-        opts.on("-b", "--brute-force", "Find entries which do not match any files") do
-          self.find_redundant_ignores = true
+        opts.on("--find-no-matches", "Find entries which do not match any files") do
+          self.find_no_matches = true
         end
         opts.on("--no-check-indent", "Do not require equal indenting") do |value|
           self.should_check_indent = value
@@ -580,7 +580,7 @@ module CheckCodeowners
 
     def files_owned
       results = repo.git_ls.all_files.map do |file|
-        # We don't *have* to brute force every pattern - we could instead
+        # We don't *have* to check every pattern - we could instead
         # run git ls-files per owner, not per pattern. But we already have
         # the code, so it's convenient.
         # Discards warnings

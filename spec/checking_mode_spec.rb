@@ -47,7 +47,7 @@ RSpec.describe "check-codeowners checking mode" do
     end
 
     it "warns" do
-      r = run "--brute-force"
+      r = run "--find-no-matches"
       aggregate_failures do
         expect(r.status.exitstatus).to eq(0)
         expect(r.stdout).to eq("WARNING: Pattern foo at .github/CODEOWNERS:1 doesn't match any files\n" + help_message)
@@ -56,7 +56,7 @@ RSpec.describe "check-codeowners checking mode" do
     end
 
     it "turns warnings into errors in --strict mode" do
-      r = run "--brute-force", "--strict"
+      r = run "--find-no-matches", "--strict"
       aggregate_failures do
         expect(r.status.exitstatus).to eq(1)
         expect(r.stdout).to eq("ERROR: Pattern foo at .github/CODEOWNERS:1 doesn't match any files\n" + help_message)
@@ -66,7 +66,7 @@ RSpec.describe "check-codeowners checking mode" do
 
     it "can be satisifed" do
       create_file("foo")
-      expect_silent_success { run "--brute-force" }
+      expect_silent_success { run "--find-no-matches" }
     end
 
   end

@@ -162,7 +162,7 @@ module CheckCodeowners
                     repo.git_ls.all_files.sort
                   end
 
-      match_map = if options.find_redundant_ignores
+      match_map = if options.find_no_matches
                     warnings.concat(repo.individual_pattern_checker.warnings)
                     repo.individual_pattern_checker.match_map
                   end
