@@ -894,7 +894,7 @@ options = CheckCodeowners::GetOptions.new(ARGV)
 repo = CheckCodeowners::Repository::Repository.new
 
 if options.who_owns
-  CheckCodeowners::Reports.new(repo, options).who_owns
+  CheckCodeowners::Reports.new(repo, **options).who_owns
   exit
 end
 p "inside "
