@@ -897,6 +897,7 @@ if options.who_owns
   CheckCodeowners::Reports.new(repo, options).who_owns
   exit
 end
+p "inside "
 
 if options.files_owned
   CheckCodeowners::Reports.new(repo, options).files_owned
