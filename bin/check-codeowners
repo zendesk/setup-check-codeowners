@@ -894,12 +894,12 @@ options = CheckCodeowners::GetOptions.new(ARGV)
 repo = CheckCodeowners::Repository::Repository.new
 
 if options.who_owns
-  CheckCodeowners::Reports.new(repo, options).who_owns
+  CheckCodeowners::Reports.new(repo, **options).who_owns
   exit
 end
 
 if options.files_owned
-  CheckCodeowners::Reports.new(repo, options).files_owned
+  CheckCodeowners::Reports.new(repo, **options).files_owned
   exit
 end
 
