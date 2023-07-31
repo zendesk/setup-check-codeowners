@@ -888,7 +888,7 @@ end
 
 
 
-
+p "I am inside SCOOT-2748 branch 1!!!!!!!!!"
 options = CheckCodeowners::GetOptions.new(ARGV)
 
 repo = CheckCodeowners::Repository::Repository.new
@@ -903,6 +903,7 @@ if options.files_owned
   exit
 end
 
+p "I am inside SCOOT-2748 branch 2!!!!!!!!!"
 checker = CheckCodeowners::CheckRunner.new(repo, **options)
 checker.show_checks
 exit 1 if checker.errors?
