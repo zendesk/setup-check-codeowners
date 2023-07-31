@@ -903,7 +903,7 @@ if options.files_owned
   exit
 end
 
-checker = CheckCodeowners::CheckRunner.new(repo, options)
+checker = CheckCodeowners::CheckRunner.new(repo, **options)
 checker.show_checks
 exit 1 if checker.errors?
 exit 0
