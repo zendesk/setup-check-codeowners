@@ -139,7 +139,7 @@ module CheckCodeowners
           bad_owners.each do |bad_owner|
             errors << {
               code: "invalid_owner",
-              message: "Invalid owner #{bad_owner} at #{entry.file}:#{entry.line_number}",
+              message: "Invalid owner #{bad_owner} at #{entry.file}:#{entry.line_number}, not present in .github/VALIDOWNERS",
               bad_owner: bad_owner,
               entry: entry
             }

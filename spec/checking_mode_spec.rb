@@ -167,7 +167,7 @@ RSpec.describe "check-codeowners checking mode" do
 
         aggregate_failures do
           expect(r.status.exitstatus).to eq(1)
-          expect(r.stdout).to eq("ERROR: Invalid owner @org/team1 at .github/CODEOWNERS:1\n" + help_message)
+          expect(r.stdout).to eq("ERROR: Invalid owner @org/team1 at .github/CODEOWNERS:1, not present in .github/VALIDOWNERS\n" + help_message)
           expect(r.stderr).to eq("")
         end
       end
