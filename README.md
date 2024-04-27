@@ -3,27 +3,20 @@
 ![Latest Release](https://img.shields.io/github/v/release/zendesk/setup-check-codeowners?label=Latest%20Release)
 ![Examples](https://github.com/zendesk/setup-check-codeowners/workflows/Test/badge.svg?branch=main)
 
-A script to check `.github/CODEOWNERS`; also a Github Action to add that
-script to the `PATH` making it available for subsequent
-actions.
+A script and Github Action to check `.github/CODEOWNERS`.
 
-`check-codeowners` is written in Ruby, and has no non-core dependencies, which makes
-it pretty easy to run. `check-codeowners` also uses `git`.
+example Features:
+- show who owns a file
+- find unowned files
+- find invalid codewowner definitions
+- check codewowners are alphabetical
+- check consistent indents
 
-If you're using it via the Github Action, you'll need `ruby` on your `PATH`.
-The [zendesk/setup-ruby action](https://github.com/zendesk/setup-ruby) can help here.
+see [Usage](Usage.md) for details.
 
-## Inputs
+## Usage of the Github Action
 
-This Action has no inputs.
-
-## Output
-
-This Action has no outputs.
-
-## Usage of the Github action
-
-### Install check-codeowners
+This adds `check-codeowners` script to the `PATH`.
 
 ```yaml
 steps:
@@ -31,11 +24,17 @@ steps:
     uses: zendesk/setup-check-codeowners@VERSION
 ```
 
-where VERSION is the version you wish you use, e.g. `v7`. Check the top of this readme
-to find the latest release.
+where `VERSION` is one of the [repo tags](https://github.com/zendesk/setup-check-codeowners/tags)
 
-This adds `check-codeowners` to your `PATH`.
+## Script and Github Action Dependencies
 
-## Usage of `check-codeowners`
+- Ruby (in Github Actions [zendesk/setup-ruby action](https://github.com/zendesk/setup-ruby) can install it)
+- Git
 
-See [the Usage guide](Usage.md).
+## Action Inputs
+
+None.
+
+## Action Output
+
+None.
