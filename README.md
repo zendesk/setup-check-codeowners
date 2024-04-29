@@ -3,16 +3,22 @@
 ![Latest Release](https://img.shields.io/github/v/release/zendesk/setup-check-codeowners?label=Latest%20Release)
 ![Examples](https://github.com/zendesk/setup-check-codeowners/workflows/Test/badge.svg?branch=main)
 
-A script and Github Action to check `.github/CODEOWNERS`.
+A script to check `.github/CODEOWNERS`, and a GitHub Action to install it.
 
-example Features:
-- show who owns a file
-- find unowned files
-- find invalid codewowner definitions
-- check codewowners are alphabetical
-- check consistent indents
+Features include:
 
-see [Usage](Usage.md) for details.
+- lookups
+  - given a file, find the owner
+  - given an owner, find their files
+- coverage
+  - find files which don't have a codeowner
+  - find codeowner entries which don't match any files
+- linting
+  - find invalid codeowner definitions
+  - check codeowners are alphabetical
+  - check consistent indents
+
+See [Usage](Usage.md) for details.
 
 ## Usage of the Github Action
 
